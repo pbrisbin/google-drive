@@ -1,3 +1,11 @@
+-- |
+--
+-- Methods for working with File resources on Google Drive. For searching see,
+-- @"Network.Google.Drive.Search"@. For uploading, see
+-- @"Network.Google.Drive.Upload"@.
+--
+-- https://developers.google.com/drive/v2/reference/files
+--
 module Network.Google.Drive.File
     ( FileId
     , Items(..)
@@ -35,6 +43,7 @@ data File = File
     { fileId :: FileId
     , fileTitle :: Text
     , fileModified :: UTCTime
+    -- | N.B. files with multiple parents are unsupported
     , fileParent :: Maybe FileId
     , fileTrashed :: Bool
     , fileDownloadUrl :: Maybe Text
@@ -60,7 +69,9 @@ instance FromJSON File where
 getFile :: FileId -> Api (Maybe File)
 getFile fileId = simpleApi $ "/files/" <> T.unpack fileId
 
-createFolder :: FileId -> Text -> Api (Maybe File)
+createFolder :: FileId -- ^ Parent under which to create the folder
+             -> Text   -- ^ Name of the folder
+             -> Api (Maybe File)
 createFolder parentId name = do
     logApi $ "CREATE FOLDER " <> T.unpack parentId <> "/" <> T.unpack name
 
@@ -74,21 +85,23 @@ createFolder parentId name = do
     folderType :: Text
     folderType = "application/vnd.google-apps.folder"
 
--- TODO
-createFile :: FilePath -> File -> Api FileId
+createFile :: FilePath -- ^ File to upload
+           -> File     -- ^ Parent under which to create the file
+           -> Api (Maybe File)
 createFile path parent = do
     logApi $ "CREATE " <> path <> " --> " <> show parent
 
-    return "new"
+    return Nothing
 
--- TODO
-updateFile :: FilePath -> File -> Api ()
+updateFile :: FilePath -- ^ File to upload from
+           -> File     -- ^ Parent under which to create the file
+           -> Api ()
 updateFile path file =
     logApi $ "UPDATE " <> path <> " --> " <> show file
 
 downloadFile :: File -> FilePath -> Api ()
 downloadFile file path = case fileDownloadUrl file of
-    Nothing -> logApi $ show file <> " had no Download URL"
+    Nothing -> logApiErr $ show file <> " has no Download URL"
     Just url -> do
         logApi $ "DOWNLOAD " <> show file <> " --> " <> path
         authenticatedDownload (T.unpack url) path

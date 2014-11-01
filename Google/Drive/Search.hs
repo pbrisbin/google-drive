@@ -1,3 +1,9 @@
+-- |
+--
+-- Searching for files on Google Drive.
+--
+-- https://developers.google.com/drive/web/search-parameters
+--
 module Network.Google.Drive.Search
     ( Query(..)
     , getFiles

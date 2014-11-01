@@ -1,16 +1,52 @@
+-- |
+--
+-- Low level interface to the Google Drive API
+--
 module Network.Google.Drive.Api
-    ( Api
+    (
+    -- * The Api monad
+    -- |
+    --
+    -- A specialized Reader over @IO@ for providing an OAuth2 access token to
+    -- any functions that need it.
+    --
+    -- Usage:
+    --
+    -- > main = do
+    -- >     tokens <- getOAuth2Tokens -- however you do that
+    -- >
+    -- >     runApi tokens $ do
+    -- >         files <- getFiles $ TitleEq "foo.txt"
+    -- >
+    -- >         case files of
+    -- >             (file:_) -> liftIO $ print file
+    -- >             _ -> return ()
+    --
+      Api
+    , runApi
+
+    -- * Types
     , Path
     , Params
-    , runApi
-    , logApi
-    , logApiErr
-    , simpleApi
+
+    -- * Api actions
     , getApi
     , postApi
+
+    -- * Logging
+    -- |
+    --
+    -- Logging is implemented by printing strings to stdout or stderr. This will
+    -- eventually be replaced by something more structured.
+    --
+    , logApi
+    , logApiErr
+
+    -- * Utilities
+    , simpleApi
     , authenticatedDownload
 
-    -- Re-exports
+    -- * Re-exports
     , liftIO
     ) where
 
@@ -45,11 +81,11 @@ type Api a = ReaderT OAuth2Tokens IO a
 runApi :: OAuth2Tokens -> Api a -> IO a
 runApi tokens f = runReaderT f tokens
 
--- TODO: WriterT, async logging
+-- | Prints the string to stdout (temporary)
 logApi :: String -> Api ()
 logApi = liftIO . putStrLn
 
--- TODO: WriterT, async logging
+-- | Prints the string to stderr (temporary)
 logApiErr :: String -> Api ()
 logApiErr = liftIO . hPutStrLn stderr
 
@@ -60,6 +96,7 @@ type Params = [(ByteString, Maybe ByteString)]
 baseUrl :: URL
 baseUrl = "https://www.googleapis.com/drive/v2"
 
+-- | Perform a GET request to the given path, decoding the response as JSON
 simpleApi :: FromJSON a => Path -> Api (Maybe a)
 simpleApi path = getApi path []
 
