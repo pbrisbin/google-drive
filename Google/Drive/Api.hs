@@ -65,6 +65,7 @@ import Network.HTTP.Conduit
     , setQueryString
     , withManager
     )
+import Network.Google.OAuth2
 import Network.HTTP.Types (Header, Method, hAuthorization, hContentType)
 import System.Directory (createDirectoryIfMissing)
 import System.FilePath (takeDirectory)
@@ -73,8 +74,6 @@ import System.IO (hPutStrLn, stderr)
 import qualified Data.ByteString.Char8 as C8
 import qualified Data.ByteString.Lazy as BL
 import qualified Data.Conduit as C
-
-import Drync.Token
 
 type Api a = ReaderT OAuth2Tokens IO a
 
