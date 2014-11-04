@@ -28,6 +28,7 @@ module Network.Google.Drive.Api
     -- * Types
     , Path
     , Params
+    , URL
 
     -- * Api actions
     , getApi
@@ -45,6 +46,10 @@ module Network.Google.Drive.Api
     -- * Utilities
     , simpleApi
     , authenticatedDownload
+    , authorize
+    , addHeader
+    , setBody
+    , setMethod
 
     -- * Re-exports
     , liftIO
@@ -108,7 +113,7 @@ getApi path query = do
 postApi :: (ToJSON a, FromJSON b) => Path -> a -> Api (Maybe b)
 postApi path body = do
     let content = (hContentType, "application/json")
-        modify = addHeader content . addBody (encode body) . setMethod "POST"
+        modify = addHeader content . setBody (encode body) . setMethod "POST"
 
     request <- fmap modify $ authorize =<< apiRequest path
 
@@ -139,8 +144,8 @@ addHeader :: Header -> Request -> Request
 addHeader header request =
     request { requestHeaders = header:requestHeaders request }
 
-addBody :: BL.ByteString -> Request -> Request
-addBody bs request = request { requestBody = RequestBodyLBS bs }
+setBody :: BL.ByteString -> Request -> Request
+setBody bs request = request { requestBody = RequestBodyLBS bs }
 
 setMethod :: Method -> Request -> Request
 setMethod method request = request { method = method }

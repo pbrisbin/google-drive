@@ -24,10 +24,13 @@ import Data.Maybe (listToMaybe)
 import Data.Monoid ((<>))
 import Data.Text (Text)
 import Data.Time (UTCTime)
+import System.Directory (getModificationTime)
+import System.FilePath (takeFileName)
 
 import qualified Data.Text as T
 
 import Network.Google.Drive.Api
+import Network.Google.Drive.Upload
 
 type FileId = Text
 
@@ -91,13 +94,29 @@ createFile :: FilePath -- ^ File to upload
 createFile path parent = do
     logApi $ "CREATE " <> path <> " --> " <> show parent
 
-    return Nothing
+    localModified <- liftIO $ getModificationTime path
+
+    let name = takeFileName path
+        body = object
+            [ "title" .= name
+            , "parents" .= [object ["id" .= fileId parent]]
+            , "modifiedDate" .= localModified
+            ]
+
+    postUpload "/files" body path
 
 updateFile :: FilePath -- ^ File to upload from
            -> File     -- ^ Parent under which to create the file
            -> Api ()
-updateFile path file =
+updateFile path file = do
     logApi $ "UPDATE " <> path <> " --> " <> show file
+
+    localModified <- liftIO $ getModificationTime path
+
+    let body = object ["modifiedDate" .= localModified]
+        apiPath = "/files/" <> (T.unpack $ fileId file)
+
+    putUpload apiPath body path
 
 downloadFile :: File -> FilePath -> Api ()
 downloadFile file path = case fileDownloadUrl file of
