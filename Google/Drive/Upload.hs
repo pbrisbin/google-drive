@@ -19,7 +19,6 @@ import Network.HTTP.Client.MultipartFormData (webkitBoundary)
 import Network.HTTP.Conduit
 import Network.HTTP.Types
 import Network.Mime
-import System.IO (hFlush, stdout)
 
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as BL
@@ -27,6 +26,7 @@ import qualified Data.ByteString.Lazy.Char8 as C8
 import qualified Data.Text as T
 
 import Network.Google.Drive.Api
+import Network.Google.Drive.Upload.Progress
 
 uploadUrl :: URL
 uploadUrl = "https://www.googleapis.com/upload/drive/v2"
@@ -74,7 +74,7 @@ addMultipart body filePath request = do
             setQueryString uploadQuery
 
         requestSource = requestBodySource requestLength $
-            sourceLbs requestBody $= progress 1 (report requestLength)
+            sourceLbs requestBody $= reportProgress (fromIntegral requestLength)
 
     return $ modify request { requestBody = requestSource }
 
@@ -92,34 +92,3 @@ mimeType = mimeByExt defaultMimeMap defaultMimeType . T.pack
 
 toLazy :: B.ByteString -> ByteString
 toLazy b = C8.fromChunks [b]
-
--- Progress reporting. TODO: generalize, extract?
-
-progress :: (MonadIO m) => Int -> (Int -> IO ()) -> Conduit i m i
-progress n act = skipN n 1
-  where
-    skipN !c !t = do
-        mv <- await
-
-        case mv of
-            Nothing -> return ()
-            Just !v ->
-               if (c :: Int) <= 1
-                  then do
-                     liftIO $ act t
-                     yield v
-                     skipN n (succ t)
-                  else do
-                     yield v
-                     skipN (pred c) (succ t)
-
-report :: (Show a, Show b) => a -> b -> IO ()
-report total n = do
-    putStr $ "  " <> format n total <> "\r"
-    hFlush stdout
-
-format :: (Show a, Show b) => a -> b -> String
-format n t = "  " <> pad maxLen (show n) <> "/" <> show t <> "\r"
-  where
-    maxLen = length $ show t
-    pad l v = replicate (l - length v) ' ' <> v
