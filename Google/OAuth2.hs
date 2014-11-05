@@ -1,11 +1,24 @@
+-- |
+--
+-- Interacting with the Google OAuth2 authorization API
+--
+-- 1. Prompt the user for a verification code
+-- 2. POST that code to the Google API for a set of tokens (access and refresh)
+-- 3. Use the access token until it expires
+-- 4. Use the refresh token to get a new access token
+-- 5. Repeat from 3
+--
 module Network.Google.OAuth2
     ( OAuth2Client(..)
     , OAuth2Code
     , OAuth2Scope
+    , OAuth2Token
     , OAuth2Tokens(..)
-    , generateTokens
 
-    -- * Lower-level actions
+    -- * Getting an access token
+    , getAccessToken
+
+    -- * Individual access used to accomplish the above
     , promptForCode
     , exchangeCode
     , refreshTokens
@@ -35,6 +48,7 @@ import qualified Data.ByteString.Lazy.Char8 as C8
 
 type OAuth2Code = String
 type OAuth2Scope = String
+type OAuth2Token = String
 
 data OAuth2Client = OAuth2Client
     { clientId :: String
@@ -43,8 +57,8 @@ data OAuth2Client = OAuth2Client
     deriving (Read, Show)
 
 data OAuth2Tokens = OAuth2Tokens
-    { accessToken :: String
-    , refreshToken :: String
+    { accessToken :: OAuth2Token
+    , refreshToken :: OAuth2Token
     , expiresIn :: Int -- ^ Seconds, minutes? Unclear.
     , tokenType :: String
     }
@@ -62,7 +76,7 @@ instance FromJSON OAuth2Tokens where
 -- Used only when refreshing a token, where the response lacks the originally
 -- supplied refresh_token
 data RefreshResponse = RefreshResponse
-    { rAccessToken :: String
+    { rAccessToken :: OAuth2Token
     , rExpiresIn :: Int
     , rTokenType :: String
     }
@@ -75,7 +89,7 @@ instance FromJSON RefreshResponse where
 
     parseJSON _ = mzero
 
-toOAuth2Tokens :: String -> RefreshResponse -> OAuth2Tokens
+toOAuth2Tokens :: OAuth2Token -> RefreshResponse -> OAuth2Tokens
 toOAuth2Tokens token RefreshResponse{..} =
     OAuth2Tokens
         { accessToken = rAccessToken
@@ -84,24 +98,17 @@ toOAuth2Tokens token RefreshResponse{..} =
         , tokenType = rTokenType
         }
 
-redirectUri :: String
-redirectUri = "urn:ietf:wg:oauth:2.0:oob"
-
-formUrl :: OAuth2Client -> [OAuth2Scope] -> String
-formUrl client scopes =
-    "https://accounts.google.com/o/oauth2/auth"
-    <> "?response_type=code"
-    <> "&client_id=" <> clientId client
-    <> "&redirect_uri=urn:ietf:wg:oauth:2.0:oob"
-    <> "&scope=" <> intercalate "+" (map urlEncode scopes)
-
--- | Find or generate refreshed OAuth2 tokens
-generateTokens :: OAuth2Client
+-- | Get a valid access token with the given scopes
+--
+-- Cached credentials are read from, and cached to, the given file. This
+-- function always refreshes the access token before returning it.
+--
+getAccessToken :: OAuth2Client
                -> [OAuth2Scope]
-               -> Bool            -- ^ Ignore cache?
-               -> FilePath        -- ^ File in which to cache the token
-               -> IO OAuth2Tokens -- ^ Refreshed token
-generateTokens client scopes force tokenFile = do
+               -> Bool           -- ^ Ignore cache?
+               -> FilePath       -- ^ File in which to cache the token
+               -> IO OAuth2Token -- ^ Refreshed token
+getAccessToken client scopes force tokenFile = do
     cached <- cachedTokens tokenFile
     tokens <- case (force, cached) of
         (False, Just t) -> return t
@@ -113,16 +120,14 @@ generateTokens client scopes force tokenFile = do
 
     void $ cacheTokens tokenFile refreshed
 
-    return refreshed
+    return $ accessToken refreshed
 
-promptForCode :: OAuth2Client -> [OAuth2Scope] -> IO String
+promptForCode :: OAuth2Client -> [OAuth2Scope] -> IO OAuth2Code
 promptForCode client scopes = do
-    let permissionUrl = formUrl client scopes
-
     putStrLn ""
     putStrLn "Visit the following URL to retrieve a verification code:"
     putStrLn ""
-    putStrLn $ "  " <> permissionUrl
+    putStrLn $ permissionUrl client scopes
     putStrLn ""
     putStr   "Verification code: "
     hFlush stdout
@@ -168,6 +173,17 @@ cachedTokens tokenFile = do
 
 cacheTokens :: FilePath -> OAuth2Tokens -> IO OAuth2Tokens
 cacheTokens tokenFile t = fmap (const t) $ try $ writeFile tokenFile (show t)
+
+permissionUrl :: OAuth2Client -> [OAuth2Scope] -> String
+permissionUrl client scopes =
+    "https://accounts.google.com/o/oauth2/auth"
+    <> "?response_type=code"
+    <> "&client_id=" <> clientId client
+    <> "&redirect_uri=urn:ietf:wg:oauth:2.0:oob"
+    <> "&scope=" <> intercalate "+" (map urlEncode scopes)
+
+redirectUri :: String
+redirectUri = "urn:ietf:wg:oauth:2.0:oob"
 
 -- With token responses, we assume that if we don't get an HTTP exception, then
 -- the response body will parse correctly.

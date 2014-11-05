@@ -70,7 +70,6 @@ import Network.HTTP.Conduit
     , setQueryString
     , withManager
     )
-import Network.Google.OAuth2
 import Network.HTTP.Types (Header, Method, hAuthorization, hContentType)
 import System.Directory (createDirectoryIfMissing)
 import System.FilePath (takeDirectory)
@@ -80,10 +79,10 @@ import qualified Data.ByteString.Char8 as C8
 import qualified Data.ByteString.Lazy as BL
 import qualified Data.Conduit as C
 
-type Api a = ReaderT OAuth2Tokens IO a
+type Api a = ReaderT String IO a
 
-runApi :: OAuth2Tokens -> Api a -> IO a
-runApi tokens f = runReaderT f tokens
+runApi :: String -> Api a -> IO a
+runApi token f = runReaderT f token
 
 -- | Prints the string to stdout (temporary)
 logApi :: String -> Api ()
@@ -134,9 +133,9 @@ apiRequest path = liftIO $ parseUrl $ baseUrl <> path
 
 authorize :: Request -> Api Request
 authorize request = do
-    tokens <- ask
+    token <- ask
 
-    let authorization = C8.pack $ "Bearer " <> accessToken tokens
+    let authorization = C8.pack $ "Bearer " <> token
 
     return $ addHeader (hAuthorization, authorization) request
 
