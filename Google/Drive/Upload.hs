@@ -10,6 +10,7 @@ module Network.Google.Drive.Upload
 
 import Control.Monad (void)
 import Control.Monad.IO.Class
+import Conduit.Progress
 import Data.Aeson
 import Data.Conduit
 import Data.Conduit.Binary (sourceLbs)
@@ -26,7 +27,6 @@ import qualified Data.ByteString.Lazy.Char8 as C8
 import qualified Data.Text as T
 
 import Network.Google.Drive.Api
-import Network.Google.Drive.Upload.Progress
 
 uploadUrl :: URL
 uploadUrl = "https://www.googleapis.com/upload/drive/v2"
@@ -74,7 +74,8 @@ addMultipart body filePath request = do
             setQueryString uploadQuery
 
         requestSource = requestBodySource requestLength $
-            sourceLbs requestBody $= reportProgress (fromIntegral requestLength)
+            sourceLbs requestBody $=
+            reportProgress B.length (fromIntegral requestLength) 100
 
     return $ modify request { requestBody = requestSource }
 
