@@ -1,27 +1,29 @@
 -- |
 --
--- Low level interface to the Google Drive API
+-- Low-level interface to the Google Drive API
+--
+-- Example:
+--
+-- > import Network.Google.Drive.Api
+-- > import Network.Google.Drive.Search (getFiles)
+-- >
+-- > main :: IO ()
+-- > main = do
+-- >     token <- getAccessToken -- however you do that
+-- >
+-- >     runApi token $ do
+-- >         files <- getFiles $ TitleEq "foo.txt"
+-- >
+-- >         case files of
+-- >             (file:_) ->
+-- >                 case fileDownloadUrl file of
+-- >                     Just url -> authenticatedDownload url "file.txt"
+-- >                     Nothing -> return ()
+-- >             _ -> return ()
 --
 module Network.Google.Drive.Api
     (
     -- * The Api monad
-    -- |
-    --
-    -- A specialized Reader over @IO@ for providing an OAuth2 access token to
-    -- any functions that need it.
-    --
-    -- Usage:
-    --
-    -- > main = do
-    -- >     tokens <- getOAuth2Tokens -- however you do that
-    -- >
-    -- >     runApi tokens $ do
-    -- >         files <- getFiles $ TitleEq "foo.txt"
-    -- >
-    -- >         case files of
-    -- >             (file:_) -> liftIO $ print file
-    -- >             _ -> return ()
-    --
       Api
     , runApi
 
@@ -118,6 +120,7 @@ postApi path body = do
 
     fmap (decode . responseBody) $ withManager $ httpLbs request
 
+-- TODO: incorporate progress
 authenticatedDownload :: URL -> FilePath -> Api ()
 authenticatedDownload url path = do
     request <- authorize =<< (liftIO $ parseUrl url)
