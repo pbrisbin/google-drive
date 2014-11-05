@@ -49,6 +49,7 @@ data File = File
     -- | N.B. files with multiple parents are unsupported
     , fileParent :: Maybe FileId
     , fileTrashed :: Bool
+    , fileSize :: Maybe Int
     , fileDownloadUrl :: Maybe Text
     }
 
@@ -65,6 +66,7 @@ instance FromJSON File where
         <*> o .: "modifiedDate"
         <*> (listToMaybe <$> (mapM (.: "id") =<< o .: "parents"))
         <*> ((.: "trashed") =<< o .: "labels")
+        <*> o .:? "fileSize"
         <*> o .:? "downloadUrl"
 
     parseJSON _ = mzero
