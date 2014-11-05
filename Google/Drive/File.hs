@@ -125,4 +125,4 @@ downloadFile file path = case fileDownloadUrl file of
     Nothing -> logApiErr $ show file <> " has no Download URL"
     Just url -> do
         logApi $ "DOWNLOAD " <> show file <> " --> " <> path
-        authenticatedDownload (T.unpack url) path
+        authenticatedDownload (T.unpack url) (fileSize file) path

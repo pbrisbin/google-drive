@@ -15,10 +15,7 @@
 -- >         files <- getFiles $ TitleEq "foo.txt"
 -- >
 -- >         case files of
--- >             (file:_) ->
--- >                 case fileDownloadUrl file of
--- >                     Just url -> authenticatedDownload url "file.txt"
--- >                     Nothing -> return ()
+-- >             (file:_) -> downloadFile file "file.txt"
 -- >             _ -> return ()
 --
 module Network.Google.Drive.Api
@@ -62,6 +59,7 @@ import Data.Aeson (FromJSON(..), ToJSON(..), decode, encode)
 import Data.ByteString (ByteString)
 import Data.Conduit
 import Data.Conduit.Binary (sinkFile)
+import Data.Conduit.Progress
 import Data.Monoid ((<>))
 import Network.HTTP.Conduit
     ( Request(..)
@@ -78,6 +76,7 @@ import System.Directory (createDirectoryIfMissing)
 import System.FilePath (takeDirectory)
 import System.IO (hPutStrLn, stderr)
 
+import qualified Data.ByteString as B
 import qualified Data.ByteString.Char8 as C8
 import qualified Data.ByteString.Lazy as BL
 
@@ -120,16 +119,19 @@ postApi path body = do
 
     fmap (decode . responseBody) $ withManager $ httpLbs request
 
--- TODO: incorporate progress
-authenticatedDownload :: URL -> FilePath -> Api ()
-authenticatedDownload url path = do
+authenticatedDownload :: URL -> (Maybe Int) -> FilePath -> Api ()
+authenticatedDownload url msize path = do
     request <- authorize =<< (liftIO $ parseUrl url)
 
     liftIO $ createDirectoryIfMissing True $ takeDirectory path
 
+    let sink = case msize of
+            Nothing -> sinkFile path
+            Just size -> reportProgress B.length size 100 =$ sinkFile path
+
     withManager $ \manager -> do
         response <- http request manager
-        responseBody response $$+- sinkFile path
+        responseBody response $$+- sink
 
 apiRequest :: Path -> Api Request
 apiRequest path = liftIO $ parseUrl $ baseUrl <> path
