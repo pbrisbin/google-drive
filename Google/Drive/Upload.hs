@@ -10,10 +10,10 @@ module Network.Google.Drive.Upload
 
 import Control.Monad (void)
 import Control.Monad.IO.Class
-import Conduit.Progress
 import Data.Aeson
 import Data.Conduit
 import Data.Conduit.Binary (sourceLbs)
+import Data.Conduit.Progress
 import Data.ByteString.Lazy (ByteString)
 import Data.Monoid ((<>))
 import Network.HTTP.Client.MultipartFormData (webkitBoundary)
