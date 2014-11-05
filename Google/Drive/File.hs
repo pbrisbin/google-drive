@@ -66,7 +66,7 @@ instance FromJSON File where
         <*> o .: "modifiedDate"
         <*> (listToMaybe <$> (mapM (.: "id") =<< o .: "parents"))
         <*> ((.: "trashed") =<< o .: "labels")
-        <*> o .:? "fileSize"
+        <*> fmap (fmap read) (o .:? "fileSize") -- fileSize is a String!
         <*> o .:? "downloadUrl"
 
     parseJSON _ = mzero
