@@ -60,6 +60,7 @@ module Network.Google.Drive.Api
 import Control.Monad.Reader
 import Data.Aeson (FromJSON(..), ToJSON(..), decode, encode)
 import Data.ByteString (ByteString)
+import Data.Conduit
 import Data.Conduit.Binary (sinkFile)
 import Data.Monoid ((<>))
 import Network.HTTP.Conduit
@@ -79,7 +80,6 @@ import System.IO (hPutStrLn, stderr)
 
 import qualified Data.ByteString.Char8 as C8
 import qualified Data.ByteString.Lazy as BL
-import qualified Data.Conduit as C
 
 type Api a = ReaderT String IO a
 
@@ -129,7 +129,7 @@ authenticatedDownload url path = do
 
     withManager $ \manager -> do
         response <- http request manager
-        responseBody response C.$$+- sinkFile path
+        responseBody response $$+- sinkFile path
 
 apiRequest :: Path -> Api Request
 apiRequest path = liftIO $ parseUrl $ baseUrl <> path
