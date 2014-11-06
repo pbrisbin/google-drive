@@ -42,14 +42,14 @@ instance FromJSON Items where
     parseJSON _ = mzero
 
 data File = File
-    { fileId :: FileId
-    , fileTitle :: Text
-    , fileModified :: UTCTime
+    { fileId :: !FileId
+    , fileTitle :: !Text
+    , fileModified :: !UTCTime
     -- | N.B. files with multiple parents are unsupported
-    , fileParent :: Maybe FileId
-    , fileTrashed :: Bool
-    , fileSize :: Maybe Int
-    , fileDownloadUrl :: Maybe Text
+    , fileParent :: !(Maybe FileId)
+    , fileTrashed :: !Bool
+    , fileSize :: !(Maybe Int)
+    , fileDownloadUrl :: !(Maybe Text)
     }
 
 instance Eq File where
