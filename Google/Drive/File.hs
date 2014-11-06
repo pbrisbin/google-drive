@@ -10,7 +10,6 @@ module Network.Google.Drive.File
     ( FileId
     , Items(..)
     , File(..)
-    , getFile
     , createFolder
     , createFile
     , updateFile
@@ -66,17 +65,14 @@ instance FromJSON File where
         <*> o .: "modifiedDate"
         <*> (listToMaybe <$> (mapM (.: "id") =<< o .: "parents"))
         <*> ((.: "trashed") =<< o .: "labels")
-        <*> fmap (fmap read) (o .:? "fileSize") -- fileSize is a String!
+        <*> (fmap read <$> o .:? "fileSize") -- fileSize is a String!
         <*> o .:? "downloadUrl"
 
     parseJSON _ = mzero
 
-getFile :: FileId -> Api (Maybe File)
-getFile fileId = simpleApi $ "/files/" <> T.unpack fileId
-
 createFolder :: FileId -- ^ Parent under which to create the folder
              -> Text   -- ^ Name of the folder
-             -> Api (Maybe File)
+             -> Api File
 createFolder parentId name = do
     logApi $ "CREATE FOLDER " <> T.unpack parentId <> "/" <> T.unpack name
 
@@ -92,7 +88,7 @@ createFolder parentId name = do
 
 createFile :: FilePath -- ^ File to upload
            -> File     -- ^ Parent under which to create the file
-           -> Api (Maybe File)
+           -> Api File
 createFile path parent = do
     logApi $ "CREATE " <> path <> " --> " <> show parent
 
@@ -121,8 +117,9 @@ updateFile path file = do
     putUpload apiPath body path
 
 downloadFile :: File -> FilePath -> Api ()
-downloadFile file path = case fileDownloadUrl file of
-    Nothing -> logApiErr $ show file <> " has no Download URL"
-    Just url -> do
-        logApi $ "DOWNLOAD " <> show file <> " --> " <> path
-        authenticatedDownload (T.unpack url) (fileSize file) path
+downloadFile file path = do
+    logApi $ "DOWNLOAD " <> show file <> " --> " <> path
+
+    case fmap T.unpack $ fileDownloadUrl file of
+        Nothing -> throwApiError $ show file <> " has no Download URL"
+        Just url -> authenticatedDownload url (fileSize file) path

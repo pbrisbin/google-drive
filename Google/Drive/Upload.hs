@@ -31,9 +31,9 @@ import Network.Google.Drive.Api
 uploadUrl :: URL
 uploadUrl = "https://www.googleapis.com/upload/drive/v2"
 
-postUpload :: (ToJSON a, FromJSON b) => Path -> a -> FilePath -> Api (Maybe b)
+postUpload :: (ToJSON a, FromJSON b) => Path -> a -> FilePath -> Api b
 postUpload path body filePath =
-    fmap (decode . responseBody) $ uploadApi "POST" path body filePath
+    decodeBody . responseBody =<< uploadApi "POST" path body filePath
 
 putUpload :: ToJSON a => Path -> a -> FilePath -> Api ()
 putUpload path body filePath = void $ uploadApi "PUT" path body filePath
@@ -47,7 +47,7 @@ uploadApi :: ToJSON a
 uploadApi method path body filePath = do
     request <- addMultipart body filePath =<< authorize =<< apiRequest path
 
-    liftIO $ withManager $ httpLbs $ setMethod method request
+    tryHttp $ withManager $ httpLbs $ setMethod method request
 
 addMultipart :: ToJSON a => a -> FilePath -> Request -> Api Request
 addMultipart body filePath request = do

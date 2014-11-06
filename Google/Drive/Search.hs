@@ -30,15 +30,9 @@ getFiles query = do
             , ("maxResults", Just "1000")
             ]
 
-    mlist <- getApi "/files" query'
+    Items items <- getApi "/files" query'
 
-    return $ case mlist of
-        Just (Items items) -> unTrashed items
-        Nothing -> []
-
-  where
-    unTrashed :: [File] -> [File]
-    unTrashed = filter (not . fileTrashed)
+    return $ filter (not . fileTrashed) items
 
 toParam :: Query -> ByteString
 toParam (TitleEq title) = "title = " <> quote title
