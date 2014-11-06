@@ -10,15 +10,12 @@ module Network.Google.Drive.Api
     , Params
     , URL
 
-    -- * Actions
+    -- * Basic actions
     , getApi
     , postApi
 
-    -- * Logging and errors
-    , logApi
-    , throwApiError
-
     -- * Utilities
+    , throwApiError
     , authenticatedDownload
     , authorize
     , addHeader
@@ -76,10 +73,6 @@ type Api a = ReaderT String (ErrorT ApiError IO) a
 
 runApi :: String -> Api a -> IO (Either ApiError a)
 runApi token f = runErrorT $ runReaderT f token
-
--- | Print a string to stdout (temporary)
-logApi :: String -> Api ()
-logApi = liftIO . putStrLn
 
 -- | Abort with the given error message
 throwApiError :: String -> Api ()

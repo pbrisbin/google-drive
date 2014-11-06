@@ -74,8 +74,6 @@ createFolder :: FileId -- ^ Parent under which to create the folder
              -> Text   -- ^ Name of the folder
              -> Api File
 createFolder parentId name = do
-    logApi $ "CREATE FOLDER " <> T.unpack parentId <> "/" <> T.unpack name
-
     postApi "/files" $ object
         [ "title" .= name
         , "parents" .= [object ["id" .= parentId]]
@@ -90,8 +88,6 @@ createFile :: FilePath -- ^ File to upload
            -> File     -- ^ Parent under which to create the file
            -> Api File
 createFile path parent = do
-    logApi $ "CREATE " <> path <> " --> " <> show parent
-
     localModified <- liftIO $ getModificationTime path
 
     let name = takeFileName path
@@ -107,8 +103,6 @@ updateFile :: FilePath -- ^ File to upload from
            -> File     -- ^ Parent under which to create the file
            -> Api ()
 updateFile path file = do
-    logApi $ "UPDATE " <> path <> " --> " <> show file
-
     localModified <- liftIO $ getModificationTime path
 
     let body = object ["modifiedDate" .= localModified]
@@ -117,9 +111,7 @@ updateFile path file = do
     putUpload apiPath body path
 
 downloadFile :: File -> FilePath -> Api ()
-downloadFile file path = do
-    logApi $ "DOWNLOAD " <> show file <> " --> " <> path
-
+downloadFile file path =
     case fmap T.unpack $ fileDownloadUrl file of
         Nothing -> throwApiError $ show file <> " has no Download URL"
         Just url -> authenticatedDownload url (fileSize file) path
