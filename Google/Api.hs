@@ -28,6 +28,7 @@ module Network.Google.Api
     , setMethod
     , setBody
     , setBodySource
+    , allowStatus
 
     -- * Re-exports
     , liftIO
@@ -55,7 +56,7 @@ import Network.HTTP.Conduit
     , setQueryString
     , withManager
     )
-import Network.HTTP.Types (Header, Method, hAuthorization, hContentType)
+import Network.HTTP.Types (Header, Method, Status, hAuthorization, hContentType)
 
 import qualified Control.Exception as E
 import qualified Data.ByteString.Char8 as C8
@@ -140,6 +141,15 @@ setBody bs request = request { requestBody = RequestBodyLBS bs }
 setBodySource :: Int64 -> Source (ResourceT IO) ByteString -> Request -> Request
 setBodySource len source request =
     request { requestBody = requestBodySource len source }
+
+allowStatus :: Status -> Request -> Request
+allowStatus status request =
+    let original = checkStatus request
+        override s r c
+            | s == status = Nothing
+            | otherwise = original s r c
+
+    in request { checkStatus = override }
 
 decodeBody :: FromJSON a => Response BL.ByteString -> Api a
 decodeBody response =
