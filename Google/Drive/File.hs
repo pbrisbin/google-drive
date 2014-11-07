@@ -4,22 +4,16 @@
 --
 -- https://developers.google.com/drive/v2/reference/files
 --
+-- See @"Network.Google.Drive.Upload"@ for creating and updating file resources.
+--
 module Network.Google.Drive.File
-    (
-    -- * File resources
-      File(..)
+    ( File(..)
     , FileId
-
-    -- * Create, Update, Download
-    , createFile
-    , createFolder
-    , updateFile
-    , downloadFile
-
-    -- * Searching
     , Query(..)
     , Items(..)
     , getFiles
+    , createFolder
+    , downloadFile
     ) where
 
 import Control.Applicative ((<$>), (<*>))
@@ -34,14 +28,13 @@ import Data.Monoid ((<>))
 import Data.Text (Text)
 import Data.Text.Encoding (encodeUtf8)
 import Data.Time (UTCTime)
-import System.Directory (createDirectoryIfMissing, getModificationTime)
-import System.FilePath (takeDirectory, takeFileName)
+import System.Directory (createDirectoryIfMissing)
+import System.FilePath (takeDirectory)
 
 import qualified Data.ByteString as B
 import qualified Data.Text as T
 
 import Network.Google.Api
-import Network.Google.Drive.Upload
 
 type FileId = Text
 
@@ -91,6 +84,15 @@ instance FromJSON Items where
 baseUrl :: URL
 baseUrl = "https://www.googleapis.com/drive/v2"
 
+getFiles :: Query -> Api [File]
+getFiles query = do
+    Items items <- getJSON (baseUrl <> "/files")
+        [ ("q", Just $ toParam query)
+        , ("maxResults", Just "1000")
+        ]
+
+    return $ filter (not . fileTrashed) items
+
 createFolder :: FileId -- ^ Parent under which to create the folder
              -> Text   -- ^ Name of the folder
              -> Api File
@@ -105,32 +107,6 @@ createFolder parentId name = do
     folderType :: Text
     folderType = "application/vnd.google-apps.folder"
 
-createFile :: FilePath -- ^ File to upload
-           -> File     -- ^ Parent under which to create the file
-           -> Api File
-createFile path parent = do
-    localModified <- liftIO $ getModificationTime path
-
-    let name = takeFileName path
-        body = object
-            [ "title" .= name
-            , "parents" .= [object ["id" .= fileId parent]]
-            , "modifiedDate" .= localModified
-            ]
-
-    postUploadResumable "/files" body path
-
-updateFile :: FilePath -- ^ File to upload from
-           -> File     -- ^ Parent under which to create the file
-           -> Api File
-updateFile path file = do
-    localModified <- liftIO $ getModificationTime path
-
-    let body = object ["modifiedDate" .= localModified]
-        apiPath = "/files/" <> (T.unpack $ fileId file)
-
-    putUploadResumable apiPath body path
-
 downloadFile :: File -> FilePath -> Api ()
 downloadFile file filePath =
     case fmap T.unpack $ fileDownloadUrl file of
@@ -144,15 +120,6 @@ downloadFile file filePath =
             source $$+- case (fileSize file) of
                 Nothing -> sinkFile filePath
                 Just size -> progress size =$ sinkFile filePath
-
-getFiles :: Query -> Api [File]
-getFiles query = do
-    Items items <- getJSON (baseUrl <> "/files")
-        [ ("q", Just $ toParam query)
-        , ("maxResults", Just "1000")
-        ]
-
-    return $ filter (not . fileTrashed) items
 
 toParam :: Query -> ByteString
 toParam (TitleEq title) = "title = " <> quote title

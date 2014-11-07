@@ -1,22 +1,25 @@
 module Network.Google.Drive.Upload.Resumable
-    ( postUploadResumable
-    , putUploadResumable
+    ( postUpload
+    , putUpload
     ) where
 
-import Control.Applicative ((<$>),(<*>))
 import Control.Monad (void)
 import Data.Aeson
 import Data.ByteString (ByteString)
+import Data.Conduit
+import Data.Conduit.Binary (sourceHandle)
+import Data.Conduit.Progress
 import Data.List (stripPrefix)
 import Data.Maybe (fromMaybe)
 import Data.Monoid ((<>))
 import Network.HTTP.Conduit
-import Network.HTTP.Types (Method, hLocation, hRange)
+import Network.HTTP.Types (Method, hContentType, hLocation, hRange)
 import System.Directory (getTemporaryDirectory)
 import System.FilePath ((</>), (<.>), isPathSeparator)
 import System.IO
 
 import qualified Control.Exception as E
+import qualified Data.ByteString as B
 import qualified Data.ByteString.Char8 as C8
 import qualified Data.ByteString.Lazy as BL
 
@@ -25,11 +28,11 @@ import Network.Google.Api
 baseUrl :: URL
 baseUrl = "https://www.googleapis.com/upload/drive/v2"
 
-postUploadResumable :: (ToJSON a, FromJSON b) => Path -> a -> FilePath -> Api b
-postUploadResumable = resumableUpload "POST"
+postUpload :: (ToJSON a, FromJSON b) => Path -> a -> FilePath -> Api b
+postUpload = resumableUpload "POST"
 
-putUploadResumable :: (ToJSON a, FromJSON b) => Path -> a -> FilePath -> Api b
-putUploadResumable = resumableUpload "PUT"
+putUpload :: (ToJSON a, FromJSON b) => Path -> a -> FilePath -> Api b
+putUpload = resumableUpload "PUT"
 
 resumableUpload :: (ToJSON a, FromJSON b)
                 => Method
@@ -39,8 +42,7 @@ resumableUpload :: (ToJSON a, FromJSON b)
                 -> Api b
 resumableUpload method path body filePath = do
     msessionUrl <- liftIO $ cachedSessionUrl filePath
-
-    case msessionUrl of
+    response <- case msessionUrl of
         Nothing -> do
             sessionUrl <- beginUpload method path body
             liftIO $ cacheSessionUrl filePath sessionUrl
@@ -52,9 +54,13 @@ resumableUpload method path body filePath = do
 
             resumeUpload sessionUrl range filePath
 
+    decodeBody response
+
 getUploadedBytes :: URL -> Api (Maybe Int)
 getUploadedBytes sessionUrl = do
-    response <- requestLbs sessionUrl $ return . setMethod "PUT"
+    response <- requestLbs sessionUrl $ setMethod "PUT"
+
+    liftIO $ print response
 
     return $ fmap rangeEnd $ lookup hRange $ responseHeaders response
 
@@ -66,10 +72,11 @@ getUploadedBytes sessionUrl = do
 
 beginUpload :: ToJSON a => Method -> Path -> a -> Api URL
 beginUpload method path body = do
-    response <- requestLbs (baseUrl <> path) $ return .
+    response <- requestLbs (baseUrl <> path) $
         setMethod method .
         setQueryString uploadQuery .
-        setBody (encode body)
+        setBody (encode body) .
+        addHeader (hContentType, "application/json")
 
     case lookup hLocation $ responseHeaders response of
         Just url -> return $ C8.unpack url
@@ -82,22 +89,25 @@ beginUpload method path body = do
         , ("setModifiedDate", Just "1")
         ]
 
-resumeUpload :: FromJSON a => URL -> Maybe Int -> FilePath -> Api a
-resumeUpload sessionUrl mlen filePath = do
-    let completed = fromMaybe 0 mlen
+resumeUpload :: URL -> Maybe Int -> FilePath -> Api (Response BL.ByteString)
+resumeUpload sessionUrl mlen filePath =
+    requestIO sessionUrl $ \request -> do
+        let completed = fromMaybe 0 mlen
 
-    (fileContents, fileLength) <-
-        liftIO $ withFile filePath ReadMode $ \h -> do
+        withFile filePath ReadMode $ \h -> do
+            fileLength <- hFileSize h
+
             hSeek h AbsoluteSeek $ fromIntegral $ completed + 1
 
-            (,) <$> BL.hGetContents h <*> hFileSize h
+            let range = nextRange completed fileLength
+                modify = setMethod "PUT" . addHeader ("Content-Range", range)
+                progress = reportProgress B.length (fromIntegral fileLength) 100
 
-    let range = nextRange completed fileLength
-
-    requestJSON sessionUrl $ return .
-        setMethod "PUT" .
-        setBody fileContents .
-        addHeader ("Content-Range", range)
+            withManager $ httpLbs $ modify request
+                { requestBody =
+                    requestBodySource (fromIntegral fileLength) $
+                    sourceHandle h $= progress
+                }
 
   where
     -- Content-Range: bytes 43-1999999/2000000
@@ -126,8 +136,8 @@ cacheFile filePath = do
   where
     sanitize = map (replacePathSeparator '-')
     replacePathSeparator c x
-        | isPathSeparator c = x
-        | otherwise = c
+        | isPathSeparator x = c
+        | otherwise = x
 
 try :: IO a -> IO (Either E.IOException a)
 try = E.try

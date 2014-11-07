@@ -19,6 +19,10 @@ module Network.Google.Api
     -- * Lower-level request
     , requestJSON
     , requestLbs
+    , requestIO
+
+    -- * Api helpers
+    , decodeBody
 
     -- * Request helpers
     , addHeader
@@ -85,7 +89,7 @@ type Path = String
 type Params = [(ByteString, Maybe ByteString)]
 
 getJSON :: FromJSON a => URL -> Params -> Api a
-getJSON url params = requestJSON url $ return . setQueryString params
+getJSON url params = requestJSON url $ setQueryString params
 
 getSource :: URL -> Params -> SourceHandler a -> Api a
 getSource url params withSource = do
@@ -97,21 +101,27 @@ getSource url params withSource = do
 
 postJSON :: (ToJSON a, FromJSON b) => URL -> Params -> a -> Api b
 postJSON url params body =
-    requestJSON url $ return .
+    requestJSON url $
         addHeader (hContentType, "application/json") .
         setMethod "POST" .
         setQueryString params .
         setBody (encode body)
 
-requestJSON :: FromJSON a => URL -> (Request -> IO Request) -> Api a
+requestJSON :: FromJSON a => URL -> (Request -> Request) -> Api a
 requestJSON url modify = decodeBody =<< requestLbs url modify
 
-requestLbs :: URL -> (Request -> IO Request) -> Api (Response BL.ByteString)
+requestLbs :: URL -> (Request -> Request) -> Api (Response BL.ByteString)
 requestLbs url modify = do
     request <- authorize url
-    modified <- liftIO $ modify request
 
-    tryHttp $ withManager $ httpLbs modified
+    tryHttp $ withManager $ httpLbs $ modify request
+
+-- | Run the generic IO action on an authorized request
+requestIO :: URL -> (Request -> IO a) -> Api a
+requestIO url action = do
+    request <- authorize url
+
+    tryHttp $ action request
 
 authorize :: URL -> Api Request
 authorize url = do
