@@ -3,8 +3,6 @@ module Network.Google.Drive.Upload.Multipart
     , putUpload
     ) where
 
-import Control.Monad (void)
-import Control.Monad.IO.Class
 import Data.Aeson
 import Data.Conduit
 import Data.Conduit.Binary (sourceLbs)
@@ -21,33 +19,25 @@ import qualified Data.ByteString.Lazy as BL
 import qualified Data.ByteString.Lazy.Char8 as C8
 import qualified Data.Text as T
 
-import Network.Google.Drive.Api
+import Network.Google.Api
 
-uploadUrl :: URL
-uploadUrl = "https://www.googleapis.com/upload/drive/v2"
+baseUrl :: URL
+baseUrl = "https://www.googleapis.com/upload/drive/v2"
 
 postUpload :: (ToJSON a, FromJSON b) => Path -> a -> FilePath -> Api b
 postUpload path body filePath =
-    decodeBody . responseBody =<< uploadApi "POST" path body filePath
+    requestJSON (baseUrl <> path) $
+    addMultipart body filePath . setMethod "POST"
 
-putUpload :: ToJSON a => Path -> a -> FilePath -> Api ()
-putUpload path body filePath = void $ uploadApi "PUT" path body filePath
+putUpload :: (ToJSON a, FromJSON b) => Path -> a -> FilePath -> Api b
+putUpload path body filePath =
+    requestJSON (baseUrl <> path) $
+    addMultipart body filePath . setMethod "PUT"
 
-uploadApi :: ToJSON a
-          => Method
-          -> Path
-          -> a
-          -> FilePath
-          -> Api (Response ByteString)
-uploadApi method path body filePath = do
-    request <- addMultipart body filePath =<< authorize =<< apiRequest path
-
-    tryHttp $ withManager $ httpLbs $ setMethod method request
-
-addMultipart :: ToJSON a => a -> FilePath -> Request -> Api Request
+addMultipart :: ToJSON a => a -> FilePath -> Request -> IO Request
 addMultipart body filePath request = do
-    boundary <- liftIO $ webkitBoundary
-    fileContents <- liftIO $ BL.readFile filePath
+    boundary <- webkitBoundary
+    fileContents <- BL.readFile filePath
 
     let contentType = "multipart/related; boundary=\"" <> boundary <> "\""
         requestBody = C8.unlines
@@ -73,9 +63,6 @@ addMultipart body filePath request = do
             reportProgress B.length (fromIntegral requestLength) 100
 
     return $ modify request { requestBody = requestSource }
-
-apiRequest :: Path -> Api Request
-apiRequest path = liftIO $ parseUrl $ uploadUrl <> path
 
 uploadQuery :: Params
 uploadQuery =
