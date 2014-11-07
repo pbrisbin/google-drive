@@ -83,10 +83,10 @@ beginUpload :: URL -> FilePath -> Api File
 beginUpload sessionUrl filePath = do
     fileLength <- liftIO $ withFile filePath ReadMode hFileSize
 
-    let progress = reportProgress B.length (fromIntegral fileLength) 100
-        source = sourceFile filePath $= progress
+    let source = sourceFile filePath
+        progress = reportProgress B.length (fromIntegral fileLength) 100
         modify = setMethod "PUT" .
-            setBodySource (fromIntegral fileLength) source
+            setBodySource (fromIntegral fileLength) (source $= progress)
 
     requestJSON sessionUrl modify
 
