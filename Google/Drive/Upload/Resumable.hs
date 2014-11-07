@@ -7,13 +7,20 @@ import Control.Monad (void)
 import Data.Aeson
 import Data.ByteString (ByteString)
 import Data.Conduit
-import Data.Conduit.Binary (sourceHandle)
+import Data.Conduit.Binary (sourceFile, sourceFileRange)
 import Data.Conduit.Progress
 import Data.List (stripPrefix)
-import Data.Maybe (fromMaybe)
 import Data.Monoid ((<>))
 import Network.HTTP.Conduit
-import Network.HTTP.Types (Method, hContentType, hLocation, hRange)
+import Network.HTTP.Types
+    ( Method
+    , Status
+    , hContentLength
+    , hContentType
+    , hLocation
+    , hRange
+    , mkStatus
+    )
 import System.Directory (getTemporaryDirectory)
 import System.FilePath ((</>), (<.>), isPathSeparator)
 import System.IO
@@ -21,57 +28,35 @@ import System.IO
 import qualified Control.Exception as E
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Char8 as C8
-import qualified Data.ByteString.Lazy as BL
 
 import Network.Google.Api
+import Network.Google.Drive.File
 
 baseUrl :: URL
 baseUrl = "https://www.googleapis.com/upload/drive/v2"
 
-postUpload :: (ToJSON a, FromJSON b) => Path -> a -> FilePath -> Api b
+postUpload :: ToJSON a => Path -> a -> FilePath -> Api File
 postUpload = resumableUpload "POST"
 
-putUpload :: (ToJSON a, FromJSON b) => Path -> a -> FilePath -> Api b
+putUpload :: ToJSON a => Path -> a -> FilePath -> Api File
 putUpload = resumableUpload "PUT"
 
-resumableUpload :: (ToJSON a, FromJSON b)
-                => Method
-                -> Path
-                -> a
-                -> FilePath
-                -> Api b
+resumableUpload :: ToJSON a => Method -> Path -> a -> FilePath -> Api File
 resumableUpload method path body filePath = do
     msessionUrl <- liftIO $ cachedSessionUrl filePath
-    response <- case msessionUrl of
-        Nothing -> do
-            sessionUrl <- beginUpload method path body
-            liftIO $ cacheSessionUrl filePath sessionUrl
 
-            resumeUpload sessionUrl Nothing filePath
+    case msessionUrl of
+        Nothing -> do
+            sessionUrl <- initiateUpload method path body
+            liftIO $ cacheSessionUrl filePath sessionUrl
+            beginUpload sessionUrl filePath
 
         Just sessionUrl -> do
-            range <- getUploadedBytes sessionUrl
-
+            range <- getUploadedBytes sessionUrl filePath
             resumeUpload sessionUrl range filePath
 
-    decodeBody response
-
-getUploadedBytes :: URL -> Api (Maybe Int)
-getUploadedBytes sessionUrl = do
-    response <- requestLbs sessionUrl $ setMethod "PUT"
-
-    liftIO $ print response
-
-    return $ fmap rangeEnd $ lookup hRange $ responseHeaders response
-
-  where
-    rangeEnd :: ByteString -> Int
-    rangeEnd b = case stripPrefix "0-" $ C8.unpack b of
-        Just bs -> read bs
-        Nothing -> 0
-
-beginUpload :: ToJSON a => Method -> Path -> a -> Api URL
-beginUpload method path body = do
+initiateUpload :: ToJSON a => Method -> Path -> a -> Api URL
+initiateUpload method path body = do
     response <- requestLbs (baseUrl <> path) $
         setMethod method .
         setQueryString uploadQuery .
@@ -86,28 +71,55 @@ beginUpload method path body = do
     uploadQuery :: Params
     uploadQuery =
         [ ("uploadType", Just "resumable")
-        , ("setModifiedDate", Just "1")
+        , ("setModifiedDate", Just "true")
         ]
 
-resumeUpload :: URL -> Maybe Int -> FilePath -> Api (Response BL.ByteString)
-resumeUpload sessionUrl mlen filePath =
-    requestIO sessionUrl $ \request -> do
-        let completed = fromMaybe 0 mlen
+beginUpload :: URL -> FilePath -> Api File
+beginUpload sessionUrl filePath = do
+    fileLength <- liftIO $ withFile filePath ReadMode hFileSize
 
-        withFile filePath ReadMode $ \h -> do
-            fileLength <- hFileSize h
+    let progress = reportProgress B.length (fromIntegral fileLength) 100
+        source = sourceFile filePath $= progress
+        modify = setMethod "PUT" .
+            setBodySource (fromIntegral fileLength) source
 
-            hSeek h AbsoluteSeek $ fromIntegral $ completed + 1
+    requestJSON sessionUrl modify
 
-            let range = nextRange completed fileLength
-                modify = setMethod "PUT" . addHeader ("Content-Range", range)
-                progress = reportProgress B.length (fromIntegral fileLength) 100
+getUploadedBytes :: URL -> FilePath -> Api Int
+getUploadedBytes sessionUrl filePath = do
+    fileLength <- liftIO $ withFile filePath ReadMode hFileSize
 
-            withManager $ httpLbs $ modify request
-                { requestBody =
-                    requestBodySource (fromIntegral fileLength) $
-                    sourceHandle h $= progress
-                }
+    response <- requestLbs sessionUrl $
+        setMethod "PUT" .
+        addHeader (hContentLength, "0") .
+        addHeader ("Content-Range", "bytes */" <> C8.pack (show fileLength)) .
+        allowStatus status308
+
+    case lookup hRange $ responseHeaders response of
+        Just range -> return $ rangeEnd range
+        Nothing -> throwApiError "Resumable upload Range header missing"
+
+  where
+    rangeEnd :: ByteString -> Int
+    rangeEnd b = case stripPrefix "0-" $ C8.unpack b of
+        Just bs -> read bs
+        Nothing -> 0
+
+resumeUpload :: URL -> Int -> FilePath -> Api File
+resumeUpload sessionUrl completed filePath = do
+    fileLength <- liftIO $ withFile filePath ReadMode hFileSize
+
+    let range = nextRange completed fileLength
+        offset = fromIntegral $ completed + 1
+        source = sourceFileRange filePath (Just offset) Nothing
+        progress = reportProgress B.length (fromIntegral fileLength) 100
+
+        modify =
+            setMethod "PUT" .
+            addHeader ("Content-Range", range) .
+            setBodySource (fromIntegral fileLength) (source $= progress)
+
+    requestJSON sessionUrl modify
 
   where
     -- Content-Range: bytes 43-1999999/2000000
@@ -117,10 +129,10 @@ resumeUpload sessionUrl mlen filePath =
 cachedSessionUrl :: FilePath -> IO (Maybe URL)
 cachedSessionUrl filePath = do
     fp <- cacheFile filePath
-    result <- fmap (fmap reads) $ try $ readFile fp
+    result <- try $ readFile fp
 
     return $ case result of
-        Right ((url,_):_) -> Just url
+        Right url -> Just url
         _ -> Nothing
 
 cacheSessionUrl :: FilePath -> URL -> IO ()
@@ -138,6 +150,9 @@ cacheFile filePath = do
     replacePathSeparator c x
         | isPathSeparator x = c
         | otherwise = x
+
+status308 :: Status
+status308 = mkStatus 308 "Resume Incomplete"
 
 try :: IO a -> IO (Either E.IOException a)
 try = E.try
