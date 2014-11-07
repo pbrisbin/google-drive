@@ -118,7 +118,7 @@ createFile path parent = do
             , "modifiedDate" .= localModified
             ]
 
-    postUpload "/files" body path
+    postUploadResumable "/files" body path
 
 updateFile :: FilePath -- ^ File to upload from
            -> File     -- ^ Parent under which to create the file
@@ -129,7 +129,7 @@ updateFile path file = do
     let body = object ["modifiedDate" .= localModified]
         apiPath = "/files/" <> (T.unpack $ fileId file)
 
-    putUpload apiPath body path
+    putUploadResumable apiPath body path
 
 downloadFile :: File -> FilePath -> Api ()
 downloadFile file filePath =

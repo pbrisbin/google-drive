@@ -10,14 +10,20 @@ module Network.Google.Api
     , Params
     , runApi
     , throwApiError
+
+    -- * High-level requests
     , getJSON
     , getSource
     , postJSON
+
+    -- * Lower-level request
     , requestJSON
+    , requestLbs
 
     -- * Request helpers
     , addHeader
     , setMethod
+    , setBody
 
     -- * Re-exports
     , liftIO
@@ -98,11 +104,14 @@ postJSON url params body =
         setBody (encode body)
 
 requestJSON :: FromJSON a => URL -> (Request -> IO Request) -> Api a
-requestJSON url modify = do
+requestJSON url modify = decodeBody =<< requestLbs url modify
+
+requestLbs :: URL -> (Request -> IO Request) -> Api (Response BL.ByteString)
+requestLbs url modify = do
     request <- authorize url
     modified <- liftIO $ modify request
 
-    decodeBody =<< tryHttp (withManager $ httpLbs $ modified)
+    tryHttp $ withManager $ httpLbs modified
 
 authorize :: URL -> Api Request
 authorize url = do
