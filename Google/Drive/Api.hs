@@ -75,7 +75,7 @@ runApi :: String -> Api a -> IO (Either ApiError a)
 runApi token f = runErrorT $ runReaderT f token
 
 -- | Abort with the given error message
-throwApiError :: String -> Api ()
+throwApiError :: String -> Api a
 throwApiError = throwError . GenericError
 
 type URL = String
