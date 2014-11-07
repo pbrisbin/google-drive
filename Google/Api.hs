@@ -19,7 +19,6 @@ module Network.Google.Api
     -- * Lower-level request
     , requestJSON
     , requestLbs
-    , requestIO
 
     -- * Api helpers
     , decodeBody
@@ -28,6 +27,7 @@ module Network.Google.Api
     , addHeader
     , setMethod
     , setBody
+    , setBodySource
 
     -- * Re-exports
     , liftIO
@@ -41,6 +41,7 @@ import Data.Aeson (FromJSON(..), ToJSON(..), eitherDecode, encode)
 import Data.ByteString (ByteString)
 import Data.Conduit
 import Data.Monoid ((<>))
+import GHC.Int (Int64)
 import Network.HTTP.Conduit
     ( HttpException(..)
     , Request(..)
@@ -49,6 +50,7 @@ import Network.HTTP.Conduit
     , http
     , httpLbs
     , parseUrl
+    , requestBodySource
     , responseBody
     , setQueryString
     , withManager
@@ -116,13 +118,6 @@ requestLbs url modify = do
 
     tryHttp $ withManager $ httpLbs $ modify request
 
--- | Run the generic IO action on an authorized request
-requestIO :: URL -> (Request -> IO a) -> Api a
-requestIO url action = do
-    request <- authorize url
-
-    tryHttp $ action request
-
 authorize :: URL -> Api Request
 authorize url = do
     token <- ask
@@ -141,6 +136,10 @@ setMethod method request = request { method = method }
 
 setBody :: BL.ByteString -> Request -> Request
 setBody bs request = request { requestBody = RequestBodyLBS bs }
+
+setBodySource :: Int64 -> Source (ResourceT IO) ByteString -> Request -> Request
+setBodySource len source request =
+    request { requestBody = requestBodySource len source }
 
 decodeBody :: FromJSON a => Response BL.ByteString -> Api a
 decodeBody response =

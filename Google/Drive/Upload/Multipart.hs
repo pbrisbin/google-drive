@@ -5,7 +5,7 @@ module Network.Google.Drive.Upload.Multipart
 
 import Data.Aeson
 import Data.Conduit
-import Data.Conduit.Binary (sourceHandle, sourceLbs)
+import Data.Conduit.Binary (sourceFile, sourceLbs)
 import Data.Conduit.Progress
 import Data.ByteString.Lazy (ByteString)
 import Data.Monoid ((<>))
@@ -21,72 +21,59 @@ import qualified Data.ByteString.Lazy.Char8 as C8
 import qualified Data.Text as T
 
 import Network.Google.Api
+import Network.Google.Drive.File
 
 baseUrl :: URL
 baseUrl = "https://www.googleapis.com/upload/drive/v2"
 
-postUpload :: (ToJSON a, FromJSON b) => Path -> a -> FilePath -> Api b
+postUpload :: ToJSON a => Path -> a -> FilePath -> Api File
 postUpload path body filePath = do
-    response <- requestIO (baseUrl <> path) $
-        uploadMultipart body filePath . setMethod "POST"
+    modify <- liftIO $ addMultipart body filePath
 
-    decodeBody response
+    requestJSON (baseUrl <> path) $ modify . setMethod "POST"
 
-putUpload :: (ToJSON a, FromJSON b) => Path -> a -> FilePath -> Api b
+putUpload :: ToJSON a => Path -> a -> FilePath -> Api File
 putUpload path body filePath = do
-    response <- requestIO (baseUrl <> path) $
-        uploadMultipart body filePath . setMethod "PUT"
+    modify <- liftIO $ addMultipart body filePath
 
-    decodeBody response
+    requestJSON (baseUrl <> path) $ modify . setMethod "PUT"
 
-uploadMultipart :: ToJSON a
-                => a
-                -> FilePath
-                -> Request
-                -> IO (Response ByteString)
-uploadMultipart body filePath request = do
+addMultipart :: ToJSON a => a -> FilePath -> IO (Request -> Request)
+addMultipart body filePath = do
     boundary <- webkitBoundary
+    fileLength <- fmap fromIntegral $ withFile filePath ReadMode hFileSize
 
-    withFile filePath ReadMode $ \h -> do
-        fileSize <- fmap fromIntegral $ hFileSize h
+    let before = C8.unlines
+            [ "--" <> toLazy boundary
+            , "Content-Type: application/json; charset=UTF-8"
+            , ""
+            , encode body
+            , ""
+            , "--" <> toLazy boundary
+            , "Content-Type: " <> toLazy (mimeType filePath)
+            , ""
+            ]
 
-        let before = C8.unlines
-                [ "--" <> toLazy boundary
-                , "Content-Type: application/json; charset=UTF-8"
-                , ""
-                , encode body
-                , ""
-                , "--" <> toLazy boundary
-                , "Content-Type: " <> toLazy (mimeType filePath)
-                , ""
-                ]
+        after = "\n--" <> toLazy boundary <> "--\n"
 
-            after = "\n--" <> toLazy boundary <> "--\n"
+        source = do
+            sourceLbs before
+            sourceFile filePath
+            sourceLbs after
 
-            source = do
-                sourceLbs before
-                sourceHandle h
-                sourceLbs after
+        progress = reportProgress B.length (fromIntegral requestLength) 100
+        contentType = "multipart/related; boundary=\"" <> boundary <> "\""
+        requestLength = BL.length before + BL.length after + fileLength
 
-        let contentType = "multipart/related; boundary=\"" <> boundary <> "\""
-            requestLength = BL.length before + BL.length after + fileSize
-
-            modify =
-                addHeader (hContentType, contentType) .
-                setQueryString uploadQuery
-
-            progress = reportProgress B.length (fromIntegral requestLength) 100
-
-        withManager $ httpLbs $ modify request
-            { requestBody =
-                requestBodySource (fromIntegral requestLength) $
-                source $= progress
-            }
+    return $
+        addHeader (hContentType, contentType) .
+        setQueryString uploadQuery .
+        setBodySource requestLength (source $= progress)
 
 uploadQuery :: Params
 uploadQuery =
     [ ("uploadType", Just "multipart")
-    , ("setModifiedDate", Just "1")
+    , ("setModifiedDate", Just "true")
     ]
 
 mimeType :: FilePath -> MimeType
