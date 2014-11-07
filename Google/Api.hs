@@ -68,8 +68,8 @@ instance Error ApiError where
 
 instance Show ApiError where
     show (HttpError ex) = "HTTP Exception: " <> show ex
-    show (InvalidJSON msg) = "Error parsing JSON: " <> msg
-    show (GenericError msg) = "Error: " <> msg
+    show (InvalidJSON msg) = "failure parsing JSON: " <> msg
+    show (GenericError msg) = msg
 
 type Api a = ReaderT String (ErrorT ApiError IO) a
 
