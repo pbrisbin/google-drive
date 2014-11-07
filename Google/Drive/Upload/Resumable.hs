@@ -23,7 +23,7 @@ import Network.HTTP.Types
     , mkStatus
     , statusIsServerError
     )
-import System.Directory (getTemporaryDirectory)
+import System.Directory (getTemporaryDirectory, removeFile)
 import System.FilePath ((</>), (<.>), isPathSeparator)
 import System.IO
 import System.Random (randomRIO)
@@ -50,12 +50,13 @@ resumableUpload method path body filePath = do
 
     case msessionUrl of
         Nothing -> do
-            sessionUrl <- initiateUpload method path body
-            liftIO $ cacheSessionUrl filePath sessionUrl
-            beginUpload sessionUrl filePath
+            cleaningUpCacheFile filePath $ do
+                sessionUrl <- initiateUpload method path body
+                liftIO $ cacheSessionUrl filePath sessionUrl
+                beginUpload sessionUrl filePath
 
         Just sessionUrl -> do
-            retryWithBackoff 1 $ do
+            cleaningUpCacheFile filePath $ retryWithBackoff 1 $ do
                 range <- getUploadedBytes sessionUrl filePath
                 resumeUpload sessionUrl range filePath
 
@@ -144,6 +145,12 @@ cacheSessionUrl filePath url = do
     fp <- cacheFile filePath
 
     void $ try $ writeFile fp url
+
+cleaningUpCacheFile :: FilePath -> Api a -> Api a
+cleaningUpCacheFile filePath action = do
+    result <- action
+    liftIO $ removeFile =<< cacheFile filePath
+    return result
 
 cacheFile :: FilePath -> IO FilePath
 cacheFile filePath = do
