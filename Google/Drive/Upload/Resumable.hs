@@ -3,6 +3,7 @@ module Network.Google.Drive.Upload.Resumable
     , putUpload
     ) where
 
+import Control.Concurrent (threadDelay)
 import Control.Monad (void)
 import Data.Aeson
 import Data.ByteString (ByteString)
@@ -20,10 +21,12 @@ import Network.HTTP.Types
     , hLocation
     , hRange
     , mkStatus
+    , statusIsServerError
     )
 import System.Directory (getTemporaryDirectory)
 import System.FilePath ((</>), (<.>), isPathSeparator)
 import System.IO
+import System.Random (randomRIO)
 
 import qualified Control.Exception as E
 import qualified Data.ByteString as B
@@ -52,8 +55,9 @@ resumableUpload method path body filePath = do
             beginUpload sessionUrl filePath
 
         Just sessionUrl -> do
-            range <- getUploadedBytes sessionUrl filePath
-            resumeUpload sessionUrl range filePath
+            retryWithBackoff 1 $ do
+                range <- getUploadedBytes sessionUrl filePath
+                resumeUpload sessionUrl range filePath
 
 initiateUpload :: ToJSON a => Method -> Path -> a -> Api URL
 initiateUpload method path body = do
@@ -150,6 +154,22 @@ cacheFile filePath = do
     replacePathSeparator c x
         | isPathSeparator x = c
         | otherwise = x
+
+retryWithBackoff :: Int -> Api a -> Api a
+retryWithBackoff seconds f = f `catchError` \e ->
+    if seconds < 16 && retryable e
+        then delay >> retryWithBackoff (seconds * 2) f
+        else throwError e
+
+  where
+    retryable :: ApiError -> Bool
+    retryable (HttpError (StatusCodeException s _ _)) = statusIsServerError s
+    retryable _ = False
+
+    delay :: Api ()
+    delay = liftIO $ do
+        ms <- randomRIO (0, 999)
+        threadDelay $ (seconds * 1000 + ms) * 1000
 
 status308 :: Status
 status308 = mkStatus 308 "Resume Incomplete"

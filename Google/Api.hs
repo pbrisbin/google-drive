@@ -32,6 +32,7 @@ module Network.Google.Api
 
     -- * Re-exports
     , liftIO
+    , throwError
     , catchError
     ) where
 
