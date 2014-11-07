@@ -10,6 +10,7 @@ import Data.ByteString (ByteString)
 import Data.Conduit
 import Data.Conduit.Binary (sourceFile, sourceFileRange)
 import Data.Conduit.Progress
+import Data.Conduit.Throttle
 import Data.List (stripPrefix)
 import Data.Monoid ((<>))
 import Network.HTTP.Conduit
@@ -84,9 +85,12 @@ beginUpload sessionUrl filePath = do
     fileLength <- liftIO $ withFile filePath ReadMode hFileSize
 
     let source = sourceFile filePath
+        throttled = throttle B.length (800 * 1000) -- 800KB/s
         progress = reportProgress B.length (fromIntegral fileLength) 100
         modify = setMethod "PUT" .
-            setBodySource (fromIntegral fileLength) (source $= progress)
+            setBodySource
+                (fromIntegral fileLength)
+                (source $= throttled $= progress)
 
     requestJSON sessionUrl modify
 
@@ -117,12 +121,15 @@ resumeUpload sessionUrl completed filePath = do
     let range = nextRange completed fileLength
         offset = fromIntegral $ completed + 1
         source = sourceFileRange filePath (Just offset) Nothing
+        throttled = throttle B.length (800 * 1000) -- 800KB/s
         progress = reportProgress B.length (fromIntegral fileLength) 100
 
         modify =
             setMethod "PUT" .
             addHeader ("Content-Range", range) .
-            setBodySource (fromIntegral fileLength) (source $= progress)
+            setBodySource
+                (fromIntegral fileLength)
+                (source $= throttled $= progress)
 
     requestJSON sessionUrl modify
 
