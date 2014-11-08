@@ -116,7 +116,9 @@ data ApiConfig = ApiConfig
 type Api a = ReaderT ApiConfig (ErrorT ApiError IO) a
 
 runApi :: String -> ApiOptions -> Api a -> IO (Either ApiError a)
-runApi token options f = runErrorT $ runReaderT f $ ApiConfig token options
+runApi token options f = runErrorT $ runReaderT action $ ApiConfig token options
+  where
+    action = debugApi ("Using token: " <> token) >> f
 
 -- | Abort with the given error message
 throwApiError :: String -> Api a

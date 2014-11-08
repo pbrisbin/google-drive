@@ -45,15 +45,21 @@ resumableUpload :: ToJSON a => Method -> Path -> a -> FilePath -> Api File
 resumableUpload method path body filePath = do
     msessionUrl <- liftIO $ cachedSessionUrl filePath
 
+    debugApi $ "Cached session URL: " <> show msessionUrl
+
     cleaningUpCacheFile filePath $ do
         case msessionUrl of
             Nothing -> do
                 sessionUrl <- initiateUpload method path body
                 liftIO $ cacheSessionUrl filePath sessionUrl
+
+                debugApi $ "Cached session URL: " <> show msessionUrl
                 beginUpload sessionUrl filePath
 
             Just sessionUrl -> do
                 range <- getUploadedBytes sessionUrl
+
+                debugApi $ "Already uploaded: " <> show range
                 resumeUpload sessionUrl range filePath
 
 initiateUpload :: ToJSON a => Method -> Path -> a -> Api URL
@@ -113,6 +119,8 @@ resumeUpload sessionUrl completed filePath = do
     let range = nextRange completed fileLength
         offset = fromIntegral $ completed + 1
 
+    debugApi $ C8.unpack $ "Resuming upload for range: " <> range
+
     source <- uploadSource
         (Just $ fromIntegral fileLength) $
         sourceFileRange filePath (Just offset) Nothing
@@ -148,6 +156,8 @@ cleaningUpCacheFile :: FilePath -> Api a -> Api a
 cleaningUpCacheFile filePath action = do
     result <- action
     liftIO $ removeFile =<< cacheFile filePath
+    debugApi $ "Removed session file for" <> filePath
+
     return result
 
 cacheFile :: FilePath -> IO FilePath
@@ -161,7 +171,10 @@ cacheFile filePath = do
         | otherwise = x
 
 retryWithBackoff :: Int -> Api a -> Api a
-retryWithBackoff seconds f = f `catchError` \e ->
+retryWithBackoff seconds f = f `catchError` \e -> do
+    debugApi $ "Error: " <> show e
+    debugApi   "Possibly retrying..."
+
     if seconds < 16 && retryable e
         then delay >> retryWithBackoff (seconds * 2) f
         else throwError e
