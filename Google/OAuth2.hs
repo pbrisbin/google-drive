@@ -24,27 +24,27 @@ module Network.Google.OAuth2
     , refreshTokens
     ) where
 
+import Control.Arrow (second)
 import Control.Applicative ((<$>),(<*>))
 import Control.Monad (mzero, void)
 import Data.Aeson
-import Data.ByteString.Lazy (ByteString)
+import Data.ByteString (ByteString)
 import Data.List (intercalate)
 import Data.Maybe (fromJust)
 import Data.Monoid ((<>))
 import Network.HTTP.Conduit
-    ( Request(..)
-    , RequestBody(..)
-    , Response(..)
+    ( Response(..)
     , httpLbs
     , parseUrl
     , withManager
+    , urlEncodedBody
     )
 import Network.HTTP.Base (urlEncode)
-import Network.HTTP.Types (hContentType)
 import System.IO (hFlush, stdout)
 
 import qualified Control.Exception as E
-import qualified Data.ByteString.Lazy.Char8 as C8
+import qualified Data.ByteString.Char8 as C8
+import qualified Data.ByteString.Lazy as BL
 
 type OAuth2Code = String
 type OAuth2Scope = String
@@ -136,32 +136,31 @@ promptForCode client scopes = do
 
 exchangeCode :: OAuth2Client -> OAuth2Code -> IO OAuth2Tokens
 exchangeCode client code = postTokens $
-       "client_id=" <> clientId client
-    <> "&client_secret=" <> clientSecret client
-    <> "&grant_type=authorization_code"
-    <> "&redirect_uri=" <> redirectUri
-    <> "&code=" <> code
+    [ ("client_id", clientId client)
+    , ("client_secret", clientSecret client)
+    , ("grant_type", "authorization_code")
+    , ("redirect_uri", redirectUri)
+    , ("code", code)
+    ]
 
 refreshTokens :: OAuth2Client -> OAuth2Tokens -> IO OAuth2Tokens
 refreshTokens client tokens = do
     refreshed <- postTokens $
-           "client_id=" <> clientId client
-        <> "&client_secret=" <> clientSecret client
-        <> "&grant_type=refresh_token"
-        <> "&refresh_token=" <> refreshToken tokens
+        [ ("client_id", clientId client)
+        , ("client_secret", clientSecret client)
+        , ("grant_type", "refresh_token")
+        , ("refresh_token", refreshToken tokens)
+        ]
 
     return $ toOAuth2Tokens (refreshToken tokens) refreshed
 
-postTokens :: FromJSON a => String -> IO a
-postTokens body = do
+postTokens :: FromJSON a => [(ByteString, String)] -> IO a
+postTokens params = do
     request <- parseUrl "https://accounts.google.com/o/oauth2/token"
 
-    fmap unsafeDecode $ withManager $ httpLbs $ request
-        { method = "POST"
-        , requestHeaders =
-            [(hContentType, "application/x-www-form-urlencoded")]
-        , requestBody = RequestBodyLBS $ C8.pack body
-        }
+    let params' = map (second C8.pack) params
+
+    fmap unsafeDecode $ withManager $ httpLbs $ urlEncodedBody params' request
 
 cachedTokens :: FilePath -> IO (Maybe OAuth2Tokens)
 cachedTokens tokenFile = do
@@ -187,7 +186,7 @@ redirectUri = "urn:ietf:wg:oauth:2.0:oob"
 
 -- With token responses, we assume that if we don't get an HTTP exception, then
 -- the response body will parse correctly.
-unsafeDecode :: FromJSON a => Response ByteString -> a
+unsafeDecode :: FromJSON a => Response BL.ByteString -> a
 unsafeDecode = fromJust . decode . responseBody
 
 try :: IO a -> IO (Either E.IOException a)
