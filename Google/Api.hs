@@ -159,7 +159,7 @@ requestLbs url modify = do
 authorize :: URL -> Api Request
 authorize url = do
     token <- fmap apiToken ask
-    request <- liftIO $ parseUrl url -- TODO: handle with Either
+    request <- parseUrl' url
 
     let authorization = C8.pack $ "Bearer " <> token
 
@@ -240,6 +240,11 @@ throttled limit = throttle B.length limit
 
 progress :: MonadIO m => Int -> Int -> Conduit ByteString m ByteString
 progress each size = reportProgress B.length size each
+
+parseUrl' :: URL -> Api Request
+parseUrl' url = case parseUrl url of
+    Just request -> return request
+    Nothing -> throwApiError $ "Invalid URL: " <> url
 
 tryHttp :: IO a -> Api a
 tryHttp f = do
