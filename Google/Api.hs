@@ -27,6 +27,7 @@ module Network.Google.Api
     , downloadSink
     , uploadSource
     , askUploadType
+    , debugApi
 
     -- * Request helpers
     , addHeader
@@ -67,6 +68,7 @@ import Network.HTTP.Conduit
     , withManager
     )
 import Network.HTTP.Types (Header, Method, Status, hAuthorization, hContentType)
+import System.IO (hPutStrLn, stderr)
 
 import qualified Control.Exception as E
 import qualified Data.ByteString as B
@@ -224,6 +226,12 @@ decodeBody response =
     case eitherDecode $ responseBody response of
         Left ex -> throwError $ InvalidJSON ex
         Right x -> return x
+
+debugApi :: String -> Api ()
+debugApi msg = do
+    debug <- fmap (apiDebug . apiOptions) ask
+
+    when debug $ liftIO $ hPutStrLn stderr $ "[DEBUG]: " <> msg
 
 throttled :: MonadIO m => Int -> Conduit ByteString m ByteString
 throttled limit = throttle B.length limit
