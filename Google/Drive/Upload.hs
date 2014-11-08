@@ -1,6 +1,9 @@
+-- |
+--
+-- Delegating functions depending on the configured @'UploadType'@.
+--
 module Network.Google.Drive.Upload
-    ( UploadType(..)
-    , createFile
+    ( createFile
     , updateFile
     ) where
 
@@ -17,11 +20,9 @@ import Network.Google.Drive.File
 import qualified Network.Google.Drive.Upload.Multipart as M
 import qualified Network.Google.Drive.Upload.Resumable as R
 
-data UploadType = Multipart | Resumable
-
 -- | Upload the local file under the given parent folder
-createFile :: UploadType -> File -> FilePath -> Api File
-createFile uploadType parent filePath = do
+createFile :: File -> FilePath -> Api File
+createFile parent filePath = do
     localModified <- liftIO $ getModificationTime filePath
 
     let name = takeFileName filePath
@@ -31,22 +32,28 @@ createFile uploadType parent filePath = do
             , "modifiedDate" .= localModified
             ]
 
-    postUpload uploadType "/files" body filePath
+    postUpload "/files" body filePath
 
 -- | Upload the local file, updating an existing remote file
-updateFile :: UploadType -> File -> FilePath -> Api File
-updateFile uploadType file filePath = do
+updateFile :: File -> FilePath -> Api File
+updateFile file filePath = do
     localModified <- liftIO $ getModificationTime filePath
 
     let path = "/files/" <> T.unpack (fileId file)
         body = object ["modifiedDate" .= localModified]
 
-    putUpload uploadType path body filePath
+    putUpload path body filePath
 
-postUpload :: ToJSON a => UploadType -> Path -> a -> FilePath -> Api File
-postUpload Multipart = M.postUpload
-postUpload Resumable = R.postUpload
+postUpload :: ToJSON a => Path -> a -> FilePath -> Api File
+postUpload path body filePath = do
+    uploadType <- askUploadType
+    case uploadType of
+        Multipart -> M.postUpload path body filePath
+        Resumable -> R.postUpload path body filePath
 
-putUpload :: ToJSON a => UploadType -> Path -> a -> FilePath -> Api File
-putUpload Multipart = M.putUpload
-putUpload Resumable = R.putUpload
+putUpload :: ToJSON a => Path -> a -> FilePath -> Api File
+putUpload path body filePath = do
+    uploadType <- askUploadType
+    case uploadType of
+        Multipart -> M.putUpload path body filePath
+        Resumable -> R.putUpload path body filePath

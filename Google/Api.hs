@@ -4,7 +4,9 @@
 --
 module Network.Google.Api
     ( Api
+    , ApiOptions(..)
     , ApiError(..)
+    , UploadType(..)
     , URL
     , Path
     , Params
@@ -22,6 +24,9 @@ module Network.Google.Api
 
     -- * Api helpers
     , decodeBody
+    , downloadSink
+    , uploadSource
+    , askUploadType
 
     -- * Request helpers
     , addHeader
@@ -31,6 +36,7 @@ module Network.Google.Api
     , allowStatus
 
     -- * Re-exports
+    , def
     , liftIO
     , throwError
     , catchError
@@ -42,6 +48,9 @@ import Control.Monad.Trans.Resource
 import Data.Aeson (FromJSON(..), ToJSON(..), eitherDecode, encode)
 import Data.ByteString (ByteString)
 import Data.Conduit
+import Data.Conduit.Progress
+import Data.Conduit.Throttle
+import Data.Default (Default(..))
 import Data.Monoid ((<>))
 import GHC.Int (Int64)
 import Network.HTTP.Conduit
@@ -60,6 +69,7 @@ import Network.HTTP.Conduit
 import Network.HTTP.Types (Header, Method, Status, hAuthorization, hContentType)
 
 import qualified Control.Exception as E
+import qualified Data.ByteString as B
 import qualified Data.ByteString.Char8 as C8
 import qualified Data.ByteString.Lazy as BL
 
@@ -79,10 +89,32 @@ instance Show ApiError where
     show (InvalidJSON msg) = "failure parsing JSON: " <> msg
     show (GenericError msg) = msg
 
-type Api a = ReaderT String (ErrorT ApiError IO) a
+data UploadType = Multipart | Resumable
 
-runApi :: String -> Api a -> IO (Either ApiError a)
-runApi token f = runErrorT $ runReaderT f token
+data ApiOptions = ApiOptions
+    { apiUploadType :: UploadType
+    , apiThrottle :: Maybe Int -- ^ Throttle to x bytes per second
+    , apiProgress :: Maybe Int -- ^ Show progress every x bytes
+    , apiDebug :: Bool         -- ^ Unused currently
+    }
+
+instance Default ApiOptions where
+    def = ApiOptions
+        { apiUploadType = Resumable
+        , apiThrottle = Nothing
+        , apiProgress = Nothing
+        , apiDebug = False
+        }
+
+data ApiConfig = ApiConfig
+    { apiToken :: String
+    , apiOptions :: ApiOptions
+    }
+
+type Api a = ReaderT ApiConfig (ErrorT ApiError IO) a
+
+runApi :: String -> ApiOptions -> Api a -> IO (Either ApiError a)
+runApi token options f = runErrorT $ runReaderT f $ ApiConfig token options
 
 -- | Abort with the given error message
 throwApiError :: String -> Api a
@@ -122,7 +154,7 @@ requestLbs url modify = do
 
 authorize :: URL -> Api Request
 authorize url = do
-    token <- ask
+    token <- fmap apiToken ask
     request <- liftIO $ parseUrl url -- TODO: handle with Either
 
     let authorization = C8.pack $ "Bearer " <> token
@@ -152,11 +184,52 @@ allowStatus status request =
 
     in request { checkStatus = override }
 
+askUploadType :: Api UploadType
+askUploadType = fmap (apiUploadType . apiOptions) ask
+
+-- | Convert the given sink to one with throttling and/or progress reporting
+--   depending on the current @ApiOptions@
+downloadSink :: MonadIO m
+             => Maybe Int
+             -> Sink ByteString m r
+             -> Api (Sink ByteString m r)
+downloadSink msize sink = do
+    options <- fmap apiOptions ask
+
+    return $ case (msize, options) of
+        (Just s, (ApiOptions _ (Just l) (Just p) _)) ->
+            throttled l =$ progress p s =$ sink
+        (Just s, (ApiOptions _ _ (Just p) _)) -> progress p s =$ sink
+        (_, (ApiOptions _ (Just l) _ _)) -> throttled l =$ sink
+        _ -> sink
+
+-- | Convert the given source to one with throttling and/or progress reporting
+--   depending on the current @ApiOptions@
+uploadSource :: MonadIO m
+             => Maybe Int
+             -> Source m ByteString
+             -> Api (Source m ByteString)
+uploadSource msize source = do
+    options <- fmap apiOptions ask
+
+    return $ case (msize, options) of
+        (Just s, (ApiOptions _ (Just l) (Just p) _)) ->
+            source $= throttled l $= progress p s
+        (Just s, (ApiOptions _ _ (Just p) _)) -> source $= progress p s
+        (_, (ApiOptions _ (Just l) _ _)) -> source $= throttled l
+        _ -> source
+
 decodeBody :: FromJSON a => Response BL.ByteString -> Api a
 decodeBody response =
     case eitherDecode $ responseBody response of
         Left ex -> throwError $ InvalidJSON ex
         Right x -> return x
+
+throttled :: MonadIO m => Int -> Conduit ByteString m ByteString
+throttled limit = throttle B.length limit
+
+progress :: MonadIO m => Int -> Int -> Conduit ByteString m ByteString
+progress each size = reportProgress B.length size each
 
 tryHttp :: IO a -> Api a
 tryHttp f = do

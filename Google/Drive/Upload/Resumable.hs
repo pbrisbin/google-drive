@@ -7,10 +7,7 @@ import Control.Concurrent (threadDelay)
 import Control.Monad (void)
 import Data.Aeson
 import Data.ByteString (ByteString)
-import Data.Conduit
 import Data.Conduit.Binary (sourceFile, sourceFileRange)
-import Data.Conduit.Progress
-import Data.Conduit.Throttle
 import Data.List (stripPrefix)
 import Data.Monoid ((<>))
 import Network.HTTP.Conduit
@@ -30,7 +27,6 @@ import System.IO
 import System.Random (randomRIO)
 
 import qualified Control.Exception as E
-import qualified Data.ByteString as B
 import qualified Data.ByteString.Char8 as C8
 
 import Network.Google.Api
@@ -40,24 +36,23 @@ baseUrl :: URL
 baseUrl = "https://www.googleapis.com/upload/drive/v2"
 
 postUpload :: ToJSON a => Path -> a -> FilePath -> Api File
-postUpload = resumableUpload "POST"
+postUpload path body = retryWithBackoff 1 . resumableUpload "POST" path body
 
 putUpload :: ToJSON a => Path -> a -> FilePath -> Api File
-putUpload = resumableUpload "PUT"
+putUpload path body = retryWithBackoff 1 . resumableUpload "PUT" path body
 
 resumableUpload :: ToJSON a => Method -> Path -> a -> FilePath -> Api File
 resumableUpload method path body filePath = do
     msessionUrl <- liftIO $ cachedSessionUrl filePath
 
-    case msessionUrl of
-        Nothing -> do
-            cleaningUpCacheFile filePath $ do
+    cleaningUpCacheFile filePath $ do
+        case msessionUrl of
+            Nothing -> do
                 sessionUrl <- initiateUpload method path body
                 liftIO $ cacheSessionUrl filePath sessionUrl
                 beginUpload sessionUrl filePath
 
-        Just sessionUrl -> do
-            cleaningUpCacheFile filePath $ retryWithBackoff 1 $ do
+            Just sessionUrl -> do
                 range <- getUploadedBytes sessionUrl filePath
                 resumeUpload sessionUrl range filePath
 
@@ -84,13 +79,12 @@ beginUpload :: URL -> FilePath -> Api File
 beginUpload sessionUrl filePath = do
     fileLength <- liftIO $ withFile filePath ReadMode hFileSize
 
-    let source = sourceFile filePath
-        throttled = throttle B.length (800 * 1000) -- 800KB/s
-        progress = reportProgress B.length (fromIntegral fileLength) 100
-        modify = setMethod "PUT" .
-            setBodySource
-                (fromIntegral fileLength)
-                (source $= throttled $= progress)
+    source <- uploadSource
+        (Just $ fromIntegral fileLength) $ sourceFile filePath
+
+    let modify =
+            setMethod "PUT" .
+            setBodySource (fromIntegral fileLength) (source)
 
     requestJSON sessionUrl modify
 
@@ -120,16 +114,15 @@ resumeUpload sessionUrl completed filePath = do
 
     let range = nextRange completed fileLength
         offset = fromIntegral $ completed + 1
-        source = sourceFileRange filePath (Just offset) Nothing
-        throttled = throttle B.length (800 * 1000) -- 800KB/s
-        progress = reportProgress B.length (fromIntegral fileLength) 100
 
-        modify =
+    source <- uploadSource
+        (Just $ fromIntegral fileLength) $
+        sourceFileRange filePath (Just offset) Nothing
+
+    let modify =
             setMethod "PUT" .
             addHeader ("Content-Range", range) .
-            setBodySource
-                (fromIntegral fileLength)
-                (source $= throttled $= progress)
+            setBodySource (fromIntegral fileLength) source
 
     requestJSON sessionUrl modify
 

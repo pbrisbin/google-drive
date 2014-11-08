@@ -22,7 +22,6 @@ import Data.Aeson (FromJSON(..), Value(..), (.=), (.:), (.:?), object)
 import Data.ByteString (ByteString)
 import Data.Conduit
 import Data.Conduit.Binary (sinkFile)
-import Data.Conduit.Progress
 import Data.Maybe (listToMaybe)
 import Data.Monoid ((<>))
 import Data.Text (Text)
@@ -31,7 +30,6 @@ import Data.Time (UTCTime)
 import System.Directory (createDirectoryIfMissing)
 import System.FilePath (takeDirectory)
 
-import qualified Data.ByteString as B
 import qualified Data.Text as T
 
 import Network.Google.Api
@@ -111,15 +109,13 @@ downloadFile :: File -> FilePath -> Api ()
 downloadFile file filePath =
     case fmap T.unpack $ fileDownloadUrl file of
         Nothing -> throwApiError $ show file <> " has no Download URL"
-        Just url -> getSource url [] $ \source -> do
-            liftIO $ createDirectoryIfMissing True $ takeDirectory filePath
+        Just url -> do
+            sink <- downloadSink (fileSize file) $ sinkFile filePath
 
-            let progress size = reportProgress B.length size 100
+            getSource url [] $ \source -> do
+                liftIO $ createDirectoryIfMissing True $ takeDirectory filePath
 
-            -- We can only report progress if we know final size
-            source $$+- case (fileSize file) of
-                Nothing -> sinkFile filePath
-                Just size -> progress size =$ sinkFile filePath
+                source $$+- sink
 
 toParam :: Query -> ByteString
 toParam (TitleEq title) = "title = " <> quote title
