@@ -53,7 +53,7 @@ resumableUpload method path body filePath = do
                 beginUpload sessionUrl filePath
 
             Just sessionUrl -> do
-                range <- getUploadedBytes sessionUrl filePath
+                range <- getUploadedBytes sessionUrl
                 resumeUpload sessionUrl range filePath
 
 initiateUpload :: ToJSON a => Method -> Path -> a -> Api URL
@@ -88,14 +88,12 @@ beginUpload sessionUrl filePath = do
 
     requestJSON sessionUrl modify
 
-getUploadedBytes :: URL -> FilePath -> Api Int
-getUploadedBytes sessionUrl filePath = do
-    fileLength <- liftIO $ withFile filePath ReadMode hFileSize
-
+getUploadedBytes :: URL -> Api Int
+getUploadedBytes sessionUrl = do
     response <- requestLbs sessionUrl $
         setMethod "PUT" .
         addHeader (hContentLength, "0") .
-        addHeader ("Content-Range", "bytes */" <> C8.pack (show fileLength)) .
+        addHeader ("Content-Range", "bytes */*") .
         allowStatus status308
 
     case lookup hRange $ responseHeaders response of
