@@ -135,7 +135,7 @@ promptForCode client scopes = do
     getLine
 
 exchangeCode :: OAuth2Client -> OAuth2Code -> IO OAuth2Tokens
-exchangeCode client code = postTokens $
+exchangeCode client code = postTokens
     [ ("client_id", clientId client)
     , ("client_secret", clientSecret client)
     , ("grant_type", "authorization_code")
@@ -145,7 +145,7 @@ exchangeCode client code = postTokens $
 
 refreshTokens :: OAuth2Client -> OAuth2Tokens -> IO OAuth2Tokens
 refreshTokens client tokens = do
-    refreshed <- postTokens $
+    refreshed <- postTokens
         [ ("client_id", clientId client)
         , ("client_secret", clientSecret client)
         , ("grant_type", "refresh_token")

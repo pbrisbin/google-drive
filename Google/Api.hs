@@ -43,6 +43,7 @@ module Network.Google.Api
     , catchError
     ) where
 
+import Control.Applicative ((<$>))
 import Control.Monad.Error
 import Control.Monad.Reader
 import Control.Monad.Trans.Resource
@@ -133,7 +134,7 @@ getJSON url params = requestJSON url $ setQueryString params
 
 getSource :: URL -> Params -> SourceHandler a -> Api a
 getSource url params withSource = do
-    request <- fmap (setQueryString params) $ authorize url
+    request <- setQueryString params <$> authorize url
 
     tryHttp $ withManager $ \manager -> do
         response <- http request manager
@@ -201,10 +202,10 @@ downloadSink msize sink = do
     options <- fmap apiOptions ask
 
     return $ case (msize, options) of
-        (Just s, (ApiOptions _ (Just l) (Just p) _)) ->
+        (Just s, ApiOptions _ (Just l) (Just p) _) ->
             throttled l =$ progress p s =$ sink
-        (Just s, (ApiOptions _ _ (Just p) _)) -> progress p s =$ sink
-        (_, (ApiOptions _ (Just l) _ _)) -> throttled l =$ sink
+        (Just s, ApiOptions _ _ (Just p) _) -> progress p s =$ sink
+        (_, ApiOptions _ (Just l) _ _) -> throttled l =$ sink
         _ -> sink
 
 -- | Convert the given source to one with throttling and/or progress reporting
@@ -217,10 +218,10 @@ uploadSource msize source = do
     options <- fmap apiOptions ask
 
     return $ case (msize, options) of
-        (Just s, (ApiOptions _ (Just l) (Just p) _)) ->
+        (Just s, ApiOptions _ (Just l) (Just p) _) ->
             source $= throttled l $= progress p s
-        (Just s, (ApiOptions _ _ (Just p) _)) -> source $= progress p s
-        (_, (ApiOptions _ (Just l) _ _)) -> source $= throttled l
+        (Just s, ApiOptions _ _ (Just p) _) -> source $= progress p s
+        (_, ApiOptions _ (Just l) _ _) -> source $= throttled l
         _ -> source
 
 decodeBody :: FromJSON a => Response BL.ByteString -> Api a
@@ -236,7 +237,7 @@ debugApi msg = do
     when debug $ liftIO $ hPutStrLn stderr $ "[DEBUG]: " <> msg
 
 throttled :: MonadIO m => Int -> Conduit ByteString m ByteString
-throttled limit = throttle B.length limit
+throttled = throttle B.length
 
 progress :: MonadIO m => Int -> Int -> Conduit ByteString m ByteString
 progress each size = reportProgress B.length size each

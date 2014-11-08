@@ -41,7 +41,7 @@ putUpload path body filePath = do
 
 addMultipart :: ToJSON a => a -> FilePath -> Api (Request -> Request)
 addMultipart body filePath = do
-    boundary <- liftIO $ webkitBoundary
+    boundary <- liftIO webkitBoundary
 
     (len, source) <- multipartSource boundary body filePath
 

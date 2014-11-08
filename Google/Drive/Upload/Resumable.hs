@@ -47,7 +47,7 @@ resumableUpload method path body filePath = do
 
     debugApi $ "Cached session URL: " <> show msessionUrl
 
-    cleaningUpCacheFile filePath $ do
+    cleaningUpCacheFile filePath $
         case msessionUrl of
             Nothing -> do
                 sessionUrl <- initiateUpload method path body
@@ -90,7 +90,7 @@ beginUpload sessionUrl filePath = do
 
     let modify =
             setMethod "PUT" .
-            setBodySource (fromIntegral fileLength) (source)
+            setBodySource (fromIntegral fileLength) source
 
     requestJSON sessionUrl modify
 

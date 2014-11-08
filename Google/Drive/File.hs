@@ -94,7 +94,7 @@ getFiles query = do
 createFolder :: FileId -- ^ Parent under which to create the folder
              -> Text   -- ^ Name of the folder
              -> Api File
-createFolder parentId name = do
+createFolder parentId name =
     postJSON (baseUrl <> "/files") [] $ object
         [ "title" .= name
         , "parents" .= [object ["id" .= parentId]]
@@ -107,7 +107,7 @@ createFolder parentId name = do
 
 downloadFile :: File -> FilePath -> Api ()
 downloadFile file filePath =
-    case fmap T.unpack $ fileDownloadUrl file of
+    case T.unpack <$> fileDownloadUrl file of
         Nothing -> throwApiError $ show file <> " has no Download URL"
         Just url -> do
             sink <- downloadSink (fileSize file) $ sinkFile filePath
