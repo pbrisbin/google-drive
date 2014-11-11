@@ -4,31 +4,31 @@
 --
 -- https://developers.google.com/drive/v2/reference/files
 --
--- See @"Network.Google.Drive.Upload"@ for creating and updating file resources.
+-- See also: @"Network.Google.Drive.Upload"@
 --
 module Network.Google.Drive.File
-    ( File(..)
-    , FileId
+    ( FileId
+    , FileData(..)
+    , File(..)
     , Query(..)
     , Items(..)
-    , getFiles
-    , createFolder
-    , downloadFile
+    , getFile
+    , insertFile
+    , listFiles
+    , newFolder
+    , newFile
     ) where
 
 import Control.Applicative ((<$>), (<*>))
 import Control.Monad (mzero)
-import Data.Aeson (FromJSON(..), Value(..), (.=), (.:), (.:?), object)
+import Data.Aeson
 import Data.ByteString (ByteString)
-import Data.Conduit
-import Data.Conduit.Binary (sinkFile)
-import Data.Maybe (listToMaybe)
 import Data.Monoid ((<>))
 import Data.Text (Text)
 import Data.Text.Encoding (encodeUtf8)
-import Data.Time (UTCTime)
-import System.Directory (createDirectoryIfMissing)
-import System.FilePath (takeDirectory)
+import Data.Time (UTCTime, getCurrentTime)
+import System.Directory (getModificationTime)
+import System.FilePath (takeFileName)
 
 import qualified Data.Text as T
 
@@ -36,92 +36,119 @@ import Network.Google.Api
 
 type FileId = Text
 
-data File = File
-    { fileId :: !FileId
-    , fileTitle :: !Text
+data FileData = FileData
+    { fileTitle :: !Text
     , fileModified :: !UTCTime
-    -- | N.B. files with multiple parents are unsupported
-    , fileParent :: !(Maybe FileId)
+    , fileParents :: ![FileId]
     , fileTrashed :: !Bool
     , fileSize :: !(Maybe Int)
     , fileDownloadUrl :: !(Maybe Text)
+    , fileMimeType :: !Text
     }
 
-instance Eq File where
-    a == b = fileId a == fileId b
+data File = File
+    { fileId :: FileId
+    , fileData :: FileData
+    }
 
 instance Show File where
-    show File{..} = T.unpack $ fileTitle <> " (" <> fileId <> ")"
+    show (File fileId fileData) = T.unpack $
+        fileTitle fileData <> " (" <> fileId <> ")"
 
-instance FromJSON File where
-    parseJSON (Object o) = File
-        <$> o .: "id"
-        <*> o .: "title"
+newtype Items = Items [File]
+
+instance FromJSON FileData where
+    parseJSON (Object o) = FileData
+        <$> o .: "title"
         <*> o .: "modifiedDate"
-        <*> (listToMaybe <$> (mapM (.: "id") =<< o .: "parents"))
+        <*> (mapM (.: "id") =<< o .: "parents")
         <*> ((.: "trashed") =<< o .: "labels")
         <*> (fmap read <$> o .:? "fileSize") -- fileSize is a String!
         <*> o .:? "downloadUrl"
+        <*> o .: "mimeType"
 
+    parseJSON _ = mzero
+
+instance FromJSON File where
+    parseJSON v@(Object o) = File
+        <$> o .: "id"
+        <*> parseJSON v
+
+    parseJSON _ = mzero
+
+instance ToJSON FileData where
+    toJSON FileData{..} = object
+        [ "title" .= fileTitle
+        , "modifiedDate" .= fileModified
+        , "parents" .= object (map ("id" .=) $ fileParents)
+        , "labels" .= object ["trashed" .= fileTrashed]
+        , "mimeType" .= fileMimeType
+        ]
+
+instance FromJSON Items where
+    parseJSON (Object o) = Items <$> (mapM parseJSON =<< o .: "items")
     parseJSON _ = mzero
 
 data Query
     = TitleEq Text
     | ParentEq FileId
+    | Untrashed
     | Query `And` Query
     | Query `Or` Query
-
-newtype Items = Items [File]
-
-instance FromJSON Items where
-    parseJSON (Object o) = Items
-        <$> (mapM parseJSON =<< o .: "items")
-
-    parseJSON _ = mzero
 
 baseUrl :: URL
 baseUrl = "https://www.googleapis.com/drive/v2"
 
-getFiles :: Query -> Api [File]
-getFiles query = do
+getFile :: FileId -> Api File
+getFile fileId = getJSON (baseUrl <> "/files/" <> T.unpack fileId) []
+
+insertFile :: FileData -> Api File
+insertFile = postJSON (baseUrl <> "/files") []
+
+listFiles :: Query -> Api [File]
+listFiles query = do
     Items items <- getJSON (baseUrl <> "/files")
         [ ("q", Just $ toParam query)
         , ("maxResults", Just "1000")
         ]
 
-    return $ filter (not . fileTrashed) items
-
-createFolder :: FileId -- ^ Parent under which to create the folder
-             -> Text   -- ^ Name of the folder
-             -> Api File
-createFolder parentId name =
-    postJSON (baseUrl <> "/files") [] $ object
-        [ "title" .= name
-        , "parents" .= [object ["id" .= parentId]]
-        , "mimeType" .= folderType
-        ]
+    return $ items
 
   where
-    folderType :: Text
-    folderType = "application/vnd.google-apps.folder"
+    toParam :: Query -> ByteString
+    toParam (TitleEq title) = "title = " <> quote title
+    toParam (ParentEq fileId) = quote fileId <> " in parents"
+    toParam Untrashed = "trashed = false"
+    toParam (p `And` q) = "(" <> toParam p <> ") and (" <> toParam q <> ")"
+    toParam (p `Or` q) = "(" <> toParam p <> ") or (" <> toParam q <> ")"
 
-downloadFile :: File -> FilePath -> Api ()
-downloadFile file filePath =
-    case T.unpack <$> fileDownloadUrl file of
-        Nothing -> throwApiError $ show file <> " has no Download URL"
-        Just url -> do
-            sink <- downloadSink (fileSize file) $ sinkFile filePath
+    quote :: Text -> ByteString
+    quote = ("'" <>) . (<> "'") . encodeUtf8
 
-            getSource url [] $ \source -> do
-                liftIO $ createDirectoryIfMissing True $ takeDirectory filePath
+newFolder :: FileId -> Text -> Api FileData
+newFolder parent title = do
+    modified <- liftIO $ getCurrentTime
 
-                source $$+- sink
+    return FileData
+        { fileTitle = title
+        , fileModified = modified
+        , fileParents = [parent]
+        , fileTrashed = False
+        , fileSize = Nothing
+        , fileDownloadUrl = Nothing
+        , fileMimeType = "application/vnd.google-apps.folder"
+        }
 
-toParam :: Query -> ByteString
-toParam (TitleEq title) = "title = " <> quote title
-toParam (ParentEq fileId) = quote fileId <> " in parents"
-toParam (p `And` q) = "(" <> toParam p <> ") and (" <> toParam q <> ")"
-toParam (p `Or` q) = "(" <> toParam p <> ") or (" <> toParam q <> ")"
+newFile :: FileId -> FilePath -> Api FileData
+newFile parent filePath = do
+    modified <- liftIO $ getModificationTime filePath
 
-quote :: Text -> ByteString
-quote = ("'" <>) . (<> "'") . encodeUtf8
+    return FileData
+        { fileTitle = T.pack $ takeFileName filePath
+        , fileModified = modified
+        , fileParents = [parent]
+        , fileTrashed = False
+        , fileSize = Nothing
+        , fileDownloadUrl = Nothing
+        , fileMimeType = ""
+        }

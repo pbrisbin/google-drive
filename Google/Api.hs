@@ -4,9 +4,7 @@
 --
 module Network.Google.Api
     ( Api
-    , ApiOptions(..)
     , ApiError(..)
-    , UploadType(..)
     , URL
     , Path
     , Params
@@ -14,6 +12,8 @@ module Network.Google.Api
     , throwApiError
 
     -- * High-level requests
+    , UploadSource
+    , SourceHandler
     , getJSON
     , getSource
     , postJSON
@@ -24,9 +24,6 @@ module Network.Google.Api
 
     -- * Api helpers
     , decodeBody
-    , downloadSink
-    , uploadSource
-    , askUploadType
     , debugApi
 
     -- * Request helpers
@@ -50,8 +47,6 @@ import Control.Monad.Trans.Resource
 import Data.Aeson (FromJSON(..), ToJSON(..), eitherDecode, encode)
 import Data.ByteString (ByteString)
 import Data.Conduit
-import Data.Conduit.Progress
-import Data.Conduit.Throttle
 import Data.Default (Default(..))
 import Data.Monoid ((<>))
 import GHC.Int (Int64)
@@ -72,10 +67,17 @@ import Network.HTTP.Types (Header, Method, Status, hAuthorization, hContentType)
 import System.IO (hPutStrLn, stderr)
 
 import qualified Control.Exception as E
-import qualified Data.ByteString as B
 import qualified Data.ByteString.Char8 as C8
 import qualified Data.ByteString.Lazy as BL
 
+-- | Uploads are provided as sources such that things like progress output or
+--   throttling can be implemented externally. If all you're trying to do is
+--   upload from a file, use @Data.Conduit.Binary.sourceFile filePath@.
+type UploadSource = Source (ResourceT IO) ByteString
+
+-- | Downloads are accomplished similarly via opening the HTTP connection as a
+--   source. If all you're trying to do is download to a file, use
+--   @Data.Conduit.Binary.sinkFile filePath@.
 type SourceHandler a =
     ResumableSource (ResourceT IO) ByteString -> ResourceT IO a
 
@@ -92,32 +94,15 @@ instance Show ApiError where
     show (InvalidJSON msg) = "failure parsing JSON: " <> msg
     show (GenericError msg) = msg
 
-data UploadType = Multipart | Resumable
-
-data ApiOptions = ApiOptions
-    { apiUploadType :: UploadType
-    , apiThrottle :: Maybe Int -- ^ Throttle to x bytes per second
-    , apiProgress :: Maybe Int -- ^ Show progress every x bytes
-    , apiDebug :: Bool         -- ^ Unused currently
-    }
-
-instance Default ApiOptions where
-    def = ApiOptions
-        { apiUploadType = Resumable
-        , apiThrottle = Nothing
-        , apiProgress = Nothing
-        , apiDebug = False
-        }
-
 data ApiConfig = ApiConfig
     { apiToken :: String
-    , apiOptions :: ApiOptions
+    , apiDebug :: Bool
     }
 
 type Api a = ReaderT ApiConfig (ErrorT ApiError IO) a
 
-runApi :: String -> ApiOptions -> Api a -> IO (Either ApiError a)
-runApi token options f = runErrorT $ runReaderT action $ ApiConfig token options
+runApi :: String -> Bool -> Api a -> IO (Either ApiError a)
+runApi token debug f = runErrorT $ runReaderT action $ ApiConfig token debug
   where
     action = debugApi ("Using token: " <> token) >> f
 
@@ -189,40 +174,37 @@ allowStatus status request =
 
     in request { checkStatus = override }
 
-askUploadType :: Api UploadType
-askUploadType = fmap (apiUploadType . apiOptions) ask
+-- -- | Convert the given sink to one with throttling and/or progress reporting
+-- --   depending on the current @ApiOptions@
+-- downloadSink :: MonadIO m
+--              => Maybe Int
+--              -> Sink ByteString m r
+--              -> Api (Sink ByteString m r)
+-- downloadSink msize sink = do
+--     options <- fmap apiOptions ask
 
--- | Convert the given sink to one with throttling and/or progress reporting
---   depending on the current @ApiOptions@
-downloadSink :: MonadIO m
-             => Maybe Int
-             -> Sink ByteString m r
-             -> Api (Sink ByteString m r)
-downloadSink msize sink = do
-    options <- fmap apiOptions ask
+--     return $ case (msize, options) of
+--         (Just s, ApiOptions _ (Just l) (Just p) _) ->
+--             throttled l =$ progress p s =$ sink
+--         (Just s, ApiOptions _ _ (Just p) _) -> progress p s =$ sink
+--         (_, ApiOptions _ (Just l) _ _) -> throttled l =$ sink
+--         _ -> sink
 
-    return $ case (msize, options) of
-        (Just s, ApiOptions _ (Just l) (Just p) _) ->
-            throttled l =$ progress p s =$ sink
-        (Just s, ApiOptions _ _ (Just p) _) -> progress p s =$ sink
-        (_, ApiOptions _ (Just l) _ _) -> throttled l =$ sink
-        _ -> sink
+-- -- | Convert the given source to one with throttling and/or progress reporting
+-- --   depending on the current @ApiOptions@
+-- uploadSource :: MonadIO m
+--              => Maybe Int
+--              -> Source m ByteString
+--              -> Api (Source m ByteString)
+-- uploadSource msize source = do
+--     options <- fmap apiOptions ask
 
--- | Convert the given source to one with throttling and/or progress reporting
---   depending on the current @ApiOptions@
-uploadSource :: MonadIO m
-             => Maybe Int
-             -> Source m ByteString
-             -> Api (Source m ByteString)
-uploadSource msize source = do
-    options <- fmap apiOptions ask
-
-    return $ case (msize, options) of
-        (Just s, ApiOptions _ (Just l) (Just p) _) ->
-            source $= throttled l $= progress p s
-        (Just s, ApiOptions _ _ (Just p) _) -> source $= progress p s
-        (_, ApiOptions _ (Just l) _ _) -> source $= throttled l
-        _ -> source
+--     return $ case (msize, options) of
+--         (Just s, ApiOptions _ (Just l) (Just p) _) ->
+--             source $= throttled l $= progress p s
+--         (Just s, ApiOptions _ _ (Just p) _) -> source $= progress p s
+--         (_, ApiOptions _ (Just l) _ _) -> source $= throttled l
+--         _ -> source
 
 decodeBody :: FromJSON a => Response BL.ByteString -> Api a
 decodeBody response =
@@ -232,15 +214,15 @@ decodeBody response =
 
 debugApi :: String -> Api ()
 debugApi msg = do
-    debug <- fmap (apiDebug . apiOptions) ask
+    debug <- fmap apiDebug ask
 
     when debug $ liftIO $ hPutStrLn stderr $ "[DEBUG]: " <> msg
 
-throttled :: MonadIO m => Int -> Conduit ByteString m ByteString
-throttled = throttle B.length
+-- throttled :: MonadIO m => Int -> Conduit ByteString m ByteString
+-- throttled = throttle B.length
 
-progress :: MonadIO m => Int -> Int -> Conduit ByteString m ByteString
-progress each size = reportProgress B.length size each
+-- progress :: MonadIO m => Int -> Int -> Conduit ByteString m ByteString
+-- progress each size = reportProgress B.length size each
 
 parseUrl' :: URL -> Api Request
 parseUrl' url = case parseUrl url of
