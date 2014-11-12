@@ -25,7 +25,6 @@ import Network.HTTP.Types
 import System.Random (randomRIO)
 
 import qualified Data.ByteString.Char8 as C8
---import qualified Data.Conduit.Binary as CB
 import qualified Data.Text as T
 
 import Network.Google.Api
@@ -42,12 +41,11 @@ uploadNewFile :: FileData -> Int -> UploadSource -> Api File
 uploadNewFile = resumableUpload "/files" "POST"
 
 resumableUpload :: Method -> Path -> FileData -> Int -> UploadSource -> Api File
-resumableUpload method path fileData fileLength source =
+resumableUpload method path fileData fileLength mkSource =
     withSessionUrl method path fileData $ \sessionUrl -> do
-        completed <- getUploadedBytes sessionUrl
-
-        retryWithBackoff 1 $
-            resumeUpload sessionUrl completed fileLength source
+        retryWithBackoff 1 $ do
+            completed <- getUploadedBytes sessionUrl
+            resumeUpload sessionUrl completed fileLength $ mkSource completed
 
 withSessionUrl :: Method -> Path -> FileData -> (URL -> Api b) -> Api b
 withSessionUrl method path fileData action = do
@@ -95,7 +93,6 @@ resumeUpload sessionUrl completed fileLength source = do
 
     debugApi $ C8.unpack $ "Resuming upload for range: " <> range
 
-    -- TODO CB.drop completed $ source
     requestJSON sessionUrl $
         setMethod "PUT" .
         addHeader ("Content-Range", range) .

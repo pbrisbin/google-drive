@@ -70,14 +70,8 @@ import qualified Control.Exception as E
 import qualified Data.ByteString.Char8 as C8
 import qualified Data.ByteString.Lazy as BL
 
--- | Uploads are provided as sources such that things like progress output or
---   throttling can be implemented externally. If all you're trying to do is
---   upload from a file, use @Data.Conduit.Binary.sourceFile filePath@.
-type UploadSource = Source (ResourceT IO) ByteString
+type UploadSource = Int -> Source (ResourceT IO) ByteString
 
--- | Downloads are accomplished similarly via opening the HTTP connection as a
---   source. If all you're trying to do is download to a file, use
---   @Data.Conduit.Binary.sinkFile filePath@.
 type SourceHandler a =
     ResumableSource (ResourceT IO) ByteString -> ResourceT IO a
 
