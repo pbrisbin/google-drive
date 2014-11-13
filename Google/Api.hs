@@ -168,10 +168,8 @@ allowStatus status request =
     in request { checkStatus = override }
 
 decodeBody :: FromJSON a => Response BL.ByteString -> Api a
-decodeBody response =
-    case eitherDecode $ responseBody response of
-        Left ex -> throwError $ InvalidJSON ex
-        Right x -> return x
+decodeBody =
+    either (throwError . InvalidJSON) return . eitherDecode . responseBody
 
 debugApi :: String -> Api ()
 debugApi msg = do
@@ -185,9 +183,4 @@ parseUrl' url = case parseUrl url of
     Nothing -> throwApiError $ "Invalid URL: " <> url
 
 tryHttp :: IO a -> Api a
-tryHttp f = do
-    result <- liftIO $ E.try f
-
-    case result of
-        Left ex -> throwError $ HttpError ex
-        Right x -> return x
+tryHttp = either (throwError . HttpError) return <=< liftIO . E.try
