@@ -100,7 +100,6 @@ runApi token debug f = runErrorT $ runReaderT action $ ApiConfig token debug
   where
     action = debugApi ("Using token: " <> token) >> f
 
--- | Abort with the given error message
 throwApiError :: String -> Api a
 throwApiError = throwError . GenericError
 
