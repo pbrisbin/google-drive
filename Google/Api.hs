@@ -168,38 +168,6 @@ allowStatus status request =
 
     in request { checkStatus = override }
 
--- -- | Convert the given sink to one with throttling and/or progress reporting
--- --   depending on the current @ApiOptions@
--- downloadSink :: MonadIO m
---              => Maybe Int
---              -> Sink ByteString m r
---              -> Api (Sink ByteString m r)
--- downloadSink msize sink = do
---     options <- fmap apiOptions ask
-
---     return $ case (msize, options) of
---         (Just s, ApiOptions _ (Just l) (Just p) _) ->
---             throttled l =$ progress p s =$ sink
---         (Just s, ApiOptions _ _ (Just p) _) -> progress p s =$ sink
---         (_, ApiOptions _ (Just l) _ _) -> throttled l =$ sink
---         _ -> sink
-
--- -- | Convert the given source to one with throttling and/or progress reporting
--- --   depending on the current @ApiOptions@
--- uploadSource :: MonadIO m
---              => Maybe Int
---              -> Source m ByteString
---              -> Api (Source m ByteString)
--- uploadSource msize source = do
---     options <- fmap apiOptions ask
-
---     return $ case (msize, options) of
---         (Just s, ApiOptions _ (Just l) (Just p) _) ->
---             source $= throttled l $= progress p s
---         (Just s, ApiOptions _ _ (Just p) _) -> source $= progress p s
---         (_, ApiOptions _ (Just l) _ _) -> source $= throttled l
---         _ -> source
-
 decodeBody :: FromJSON a => Response BL.ByteString -> Api a
 decodeBody response =
     case eitherDecode $ responseBody response of
@@ -211,12 +179,6 @@ debugApi msg = do
     debug <- fmap apiDebug ask
 
     when debug $ liftIO $ hPutStrLn stderr $ "[DEBUG]: " <> msg
-
--- throttled :: MonadIO m => Int -> Conduit ByteString m ByteString
--- throttled = throttle B.length
-
--- progress :: MonadIO m => Int -> Int -> Conduit ByteString m ByteString
--- progress each size = reportProgress B.length size each
 
 parseUrl' :: URL -> Api Request
 parseUrl' url = case parseUrl url of
