@@ -13,7 +13,7 @@ module Network.Google.Api
 
     -- * High-level requests
     , UploadSource
-    , SourceHandler
+    , DownloadSink
     , getJSON
     , getSource
     , postJSON
@@ -72,7 +72,7 @@ import qualified Data.ByteString.Lazy as BL
 
 type UploadSource = Int -> Source (ResourceT IO) ByteString
 
-type SourceHandler a =
+type DownloadSink a =
     ResumableSource (ResourceT IO) ByteString -> ResourceT IO a
 
 data ApiError
@@ -111,7 +111,7 @@ type Params = [(ByteString, Maybe ByteString)]
 getJSON :: FromJSON a => URL -> Params -> Api a
 getJSON url params = requestJSON url $ setQueryString params
 
-getSource :: URL -> Params -> SourceHandler a -> Api a
+getSource :: URL -> Params -> DownloadSink a -> Api a
 getSource url params withSource = do
     request <- setQueryString params <$> authorize url
 
