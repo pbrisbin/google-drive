@@ -93,7 +93,7 @@ data ApiConfig = ApiConfig
     , apiDebug :: Bool
     }
 
-type Api a = ReaderT ApiConfig (ErrorT ApiError IO) a
+type Api = ReaderT ApiConfig (ErrorT ApiError IO)
 
 runApi :: String -> Bool -> Api a -> IO (Either ApiError a)
 runApi token debug f = runErrorT $ runReaderT action $ ApiConfig token debug
