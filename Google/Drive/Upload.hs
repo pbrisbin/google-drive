@@ -1,5 +1,6 @@
 module Network.Google.Drive.Upload
-    ( uploadFile
+    ( UploadSource
+    , uploadFile
     , uploadNewFile
     ) where
 
@@ -29,6 +30,8 @@ import qualified Data.Text as T
 
 import Network.Google.Api
 import Network.Google.Drive.File
+
+type UploadSource = Int -> Source (ResourceT IO) ByteString
 
 baseUrl :: URL
 baseUrl = "https://www.googleapis.com/upload/drive/v2"
@@ -91,8 +94,6 @@ resumeUpload sessionUrl completed fileLength source = do
     let left = fileLength - completed
         range = nextRange completed fileLength
 
-    debugApi $ C8.unpack $ "Resuming upload for range: " <> range
-
     requestJSON sessionUrl $
         setMethod "PUT" .
         addHeader ("Content-Range", range) .
@@ -104,10 +105,7 @@ resumeUpload sessionUrl completed fileLength source = do
         "bytes " <> show (c + 1) <> "-" <> show (t - 1) <> "/" <> show t
 
 retryWithBackoff :: Int -> Api a -> Api a
-retryWithBackoff seconds f = f `catchError` \e -> do
-    debugApi $ "Error: " <> show e
-    debugApi $ "Current backoff: " <> show seconds <> " seconds"
-
+retryWithBackoff seconds f = f `catchError` \e ->
     if seconds < 16 && retryable e
         then delay >> retryWithBackoff (seconds * 2) f
         else throwError e

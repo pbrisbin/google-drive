@@ -12,7 +12,6 @@ module Network.Google.Api
     , throwApiError
 
     -- * High-level requests
-    , UploadSource
     , DownloadSink
     , getJSON
     , getSource
@@ -24,7 +23,6 @@ module Network.Google.Api
 
     -- * Api helpers
     , decodeBody
-    , debugApi
 
     -- * Request helpers
     , addHeader
@@ -34,7 +32,6 @@ module Network.Google.Api
     , allowStatus
 
     -- * Re-exports
-    , def
     , liftIO
     , throwError
     , catchError
@@ -47,7 +44,6 @@ import Control.Monad.Trans.Resource
 import Data.Aeson (FromJSON(..), ToJSON(..), eitherDecode, encode)
 import Data.ByteString (ByteString)
 import Data.Conduit
-import Data.Default (Default(..))
 import Data.Monoid ((<>))
 import GHC.Int (Int64)
 import Network.HTTP.Conduit
@@ -63,14 +59,17 @@ import Network.HTTP.Conduit
     , setQueryString
     , withManager
     )
-import Network.HTTP.Types (Header, Method, Status, hAuthorization, hContentType)
-import System.IO (hPutStrLn, stderr)
+import Network.HTTP.Types
+    ( Header
+    , Method
+    , Status
+    , hAuthorization
+    , hContentType
+    )
 
 import qualified Control.Exception as E
 import qualified Data.ByteString.Char8 as C8
 import qualified Data.ByteString.Lazy as BL
-
-type UploadSource = Int -> Source (ResourceT IO) ByteString
 
 type DownloadSink a =
     ResumableSource (ResourceT IO) ByteString -> ResourceT IO a
@@ -88,17 +87,10 @@ instance Show ApiError where
     show (InvalidJSON msg) = "failure parsing JSON: " <> msg
     show (GenericError msg) = msg
 
-data ApiConfig = ApiConfig
-    { apiToken :: String
-    , apiDebug :: Bool
-    }
+type Api = ReaderT String (ErrorT ApiError IO)
 
-type Api = ReaderT ApiConfig (ErrorT ApiError IO)
-
-runApi :: String -> Bool -> Api a -> IO (Either ApiError a)
-runApi token debug f = runErrorT $ runReaderT action $ ApiConfig token debug
-  where
-    action = debugApi ("Using token: " <> token) >> f
+runApi :: String -> Api a -> IO (Either ApiError a)
+runApi token f = runErrorT $ runReaderT f token
 
 throwApiError :: String -> Api a
 throwApiError = throwError . GenericError
@@ -137,7 +129,7 @@ requestLbs url modify = do
 
 authorize :: URL -> Api Request
 authorize url = do
-    token <- fmap apiToken ask
+    token <- ask
     request <- parseUrl' url
 
     let authorization = C8.pack $ "Bearer " <> token
@@ -170,12 +162,6 @@ allowStatus status request =
 decodeBody :: FromJSON a => Response BL.ByteString -> Api a
 decodeBody =
     either (throwError . InvalidJSON) return . eitherDecode . responseBody
-
-debugApi :: String -> Api ()
-debugApi msg = do
-    debug <- fmap apiDebug ask
-
-    when debug $ liftIO $ hPutStrLn stderr $ "[DEBUG]: " <> msg
 
 parseUrl' :: URL -> Api Request
 parseUrl' url = case parseUrl url of
