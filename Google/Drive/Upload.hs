@@ -1,7 +1,6 @@
 module Network.Google.Drive.Upload
     ( UploadSource
     , uploadFile
-    , uploadNewFile
     ) where
 
 import Control.Concurrent (threadDelay)
@@ -26,7 +25,6 @@ import Network.HTTP.Types
 import System.Random (randomRIO)
 
 import qualified Data.ByteString.Char8 as C8
-import qualified Data.Text as T
 
 import Network.Google.Api
 import Network.Google.Drive.File
@@ -37,25 +35,22 @@ baseUrl :: URL
 baseUrl = "https://www.googleapis.com/upload/drive/v2"
 
 uploadFile :: File -> Int -> UploadSource -> Api File
-uploadFile (File fileId fileData) =
-    resumableUpload "PUT" (T.unpack $ "/files/" <> fileId) fileData
+uploadFile file fileLength mkSource = do
+    let m = uploadMethod file
+        p = uploadPath file
+        d = uploadData file
 
-uploadNewFile :: FileData -> Int -> UploadSource -> Api File
-uploadNewFile = resumableUpload "/files" "POST"
-
-resumableUpload :: Method -> Path -> FileData -> Int -> UploadSource -> Api File
-resumableUpload method path fileData fileLength mkSource =
-    withSessionUrl method path fileData $ \sessionUrl -> do
+    withSessionUrl m p d $ \sessionUrl -> do
         retryWithBackoff 1 $ do
             completed <- getUploadedBytes sessionUrl
             resumeUpload sessionUrl completed fileLength $ mkSource completed
 
-withSessionUrl :: Method -> Path -> FileData -> (URL -> Api b) -> Api b
-withSessionUrl method path fileData action = do
+withSessionUrl :: ToJSON a => Method -> Path -> a -> (URL -> Api b) -> Api b
+withSessionUrl method path fd action = do
     response <- requestLbs (baseUrl <> path) $
         setMethod method .
         setQueryString uploadQuery .
-        setBody (encode fileData) .
+        setBody (encode fd) .
         addHeader (hContentType, "application/json")
 
     case lookup hLocation $ responseHeaders response of

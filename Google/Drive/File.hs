@@ -7,9 +7,14 @@
 -- See also: @"Network.Google.Drive.Upload"@
 --
 module Network.Google.Drive.File
-    ( FileId
+    ( File(..)
+    , FileId
     , FileData(..)
-    , File(..)
+    , fileId
+    , fileData
+    , uploadMethod
+    , uploadPath
+    , uploadData
     , Query(..)
     , Items(..)
     , getFile
@@ -27,6 +32,7 @@ import Data.Monoid ((<>))
 import Data.Text (Text)
 import Data.Text.Encoding (encodeUtf8)
 import Data.Time (UTCTime, getCurrentTime)
+import Network.HTTP.Types (Method)
 import System.Directory (getModificationTime)
 import System.FilePath (takeFileName)
 
@@ -46,14 +52,35 @@ data FileData = FileData
     , fileMimeType :: !Text
     }
 
-data File = File
-    { fileId :: FileId
-    , fileData :: FileData
-    }
+data File = File FileId FileData | New FileData
+
+instance Eq File where
+    File a _ == File b _ = a == b
+    _ == _ = False
 
 instance Show File where
-    show (File fileId fileData) = T.unpack $
-        fileTitle fileData <> " (" <> fileId <> ")"
+    show (File fi fd) = T.unpack $ fileTitle fd <> " (" <> fi <> ")"
+    show (New fd) = show $ File "new" fd
+
+fileId :: File -> FileId
+fileId (File x _) = x
+fileId _ = error "Cannot get fileId for new File"
+
+fileData :: File -> FileData
+fileData (File _ x) = x
+fileData (New x) = x
+
+uploadMethod :: File -> Method
+uploadMethod (File _ _) = "PUT"
+uploadMethod (New _) = "POST"
+
+uploadPath :: File -> Path
+uploadPath (File fid _) = "/files/" <> T.unpack fid
+uploadPath (New _) = "/files"
+
+uploadData :: File -> FileData
+uploadData (File _ fd) = fd
+uploadData (New fd) = fd
 
 newtype Items = Items [File]
 
@@ -100,10 +127,11 @@ baseUrl :: URL
 baseUrl = "https://www.googleapis.com/drive/v2"
 
 getFile :: FileId -> Api File
-getFile fileId = getJSON (baseUrl <> "/files/" <> T.unpack fileId) []
+getFile fid = getJSON (baseUrl <> "/files/" <> T.unpack fid) []
 
-insertFile :: FileData -> Api File
-insertFile = postJSON (baseUrl <> "/files") []
+insertFile :: File -> Api File
+insertFile (New fd) = postJSON (baseUrl <> "/files") [] fd
+insertFile _ = throwApiError "Cannot insert existing file"
 
 listFiles :: Query -> Api [File]
 listFiles query = do
@@ -117,7 +145,7 @@ listFiles query = do
   where
     toParam :: Query -> ByteString
     toParam (TitleEq title) = "title = " <> quote title
-    toParam (ParentEq fileId) = quote fileId <> " in parents"
+    toParam (ParentEq fid) = quote fid <> " in parents"
     toParam Untrashed = "trashed = false"
     toParam (p `And` q) = "(" <> toParam p <> ") and (" <> toParam q <> ")"
     toParam (p `Or` q) = "(" <> toParam p <> ") or (" <> toParam q <> ")"
@@ -125,11 +153,11 @@ listFiles query = do
     quote :: Text -> ByteString
     quote = ("'" <>) . (<> "'") . encodeUtf8
 
-newFolder :: FileId -> Text -> Api FileData
+newFolder :: FileId -> Text -> Api File
 newFolder parent title = do
     modified <- liftIO $ getCurrentTime
 
-    return FileData
+    return $ New $ FileData
         { fileTitle = title
         , fileModified = modified
         , fileParents = [parent]
@@ -139,11 +167,11 @@ newFolder parent title = do
         , fileMimeType = "application/vnd.google-apps.folder"
         }
 
-newFile :: FileId -> FilePath -> Api FileData
+newFile :: FileId -> FilePath -> Api File
 newFile parent filePath = do
     modified <- liftIO $ getModificationTime filePath
 
-    return FileData
+    return $ New $ FileData
         { fileTitle = T.pack $ takeFileName filePath
         , fileModified = modified
         , fileParents = [parent]
