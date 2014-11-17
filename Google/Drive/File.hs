@@ -14,6 +14,7 @@ module Network.Google.Drive.File
     , FileData(..)
     , fileId
     , fileData
+    , isFolder
     , localPath
     , uploadMethod
     , uploadPath
@@ -140,6 +141,9 @@ instance FromJSON Items where
     parseJSON (Object o) = Items <$> (mapM parseJSON =<< o .: "items")
     parseJSON _ = mzero
 
+isFolder :: File -> Bool
+isFolder = (== folderMimeType) . fileMimeType . fileData
+
 -- | Search query parameter
 --
 -- Currently only a small subset of queries are supported
@@ -213,5 +217,8 @@ createFolder parent title = do
         , fileTrashed = False
         , fileSize = Nothing
         , fileDownloadUrl = Nothing
-        , fileMimeType = "application/vnd.google-apps.folder"
+        , fileMimeType = folderMimeType
         }
+
+folderMimeType :: Text
+folderMimeType = "application/vnd.google-apps.folder"
