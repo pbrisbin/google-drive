@@ -13,8 +13,7 @@ import Data.Maybe (fromMaybe)
 import Data.Monoid ((<>))
 import Network.HTTP.Conduit
 import Network.HTTP.Types
-    ( Method
-    , Status
+    ( Status
     , hContentLength
     , hContentType
     , hLocation
@@ -35,22 +34,18 @@ baseUrl :: URL
 baseUrl = "https://www.googleapis.com/upload/drive/v2"
 
 uploadFile :: File -> Int -> UploadSource -> Api File
-uploadFile file fileLength mkSource = do
-    let m = uploadMethod file
-        p = uploadPath file
-        d = uploadData file
-
-    withSessionUrl m p d $ \sessionUrl -> do
+uploadFile file fileLength mkSource =
+    withSessionUrl file $ \url -> do
         retryWithBackoff 1 $ do
-            completed <- getUploadedBytes sessionUrl
-            resumeUpload sessionUrl completed fileLength $ mkSource completed
+            completed <- getUploadedBytes url
+            resumeUpload url completed fileLength mkSource
 
-withSessionUrl :: ToJSON a => Method -> Path -> a -> (URL -> Api b) -> Api b
-withSessionUrl method path fd action = do
-    response <- requestLbs (baseUrl <> path) $
-        setMethod method .
+withSessionUrl :: File -> (URL -> Api b) -> Api b
+withSessionUrl file action  = do
+    response <- requestLbs (baseUrl <> uploadPath file) $
+        setMethod (uploadMethod file) .
         setQueryString uploadQuery .
-        setBody (encode fd) .
+        setBody (encode $ uploadData file) .
         addHeader (hContentType, "application/json")
 
     case lookup hLocation $ responseHeaders response of
@@ -65,8 +60,8 @@ withSessionUrl method path fd action = do
         ]
 
 getUploadedBytes :: URL -> Api Int
-getUploadedBytes sessionUrl = do
-    response <- requestLbs sessionUrl $
+getUploadedBytes url = do
+    response <- requestLbs url $
         setMethod "PUT" .
         addHeader (hContentLength, "0") .
         addHeader ("Content-Range", "bytes */*") .
@@ -83,16 +78,16 @@ getUploadedBytes sessionUrl = do
 resumeUpload :: URL
              -> Int -- ^ completed
              -> Int -- ^ total
-             -> Source (ResourceT IO) ByteString
+             -> UploadSource
              -> Api File
-resumeUpload sessionUrl completed fileLength source = do
+resumeUpload url completed fileLength mkSource = do
     let left = fileLength - completed
         range = nextRange completed fileLength
 
-    requestJSON sessionUrl $
+    requestJSON url $
         setMethod "PUT" .
         addHeader ("Content-Range", range) .
-        setBodySource (fromIntegral left) source
+        setBodySource (fromIntegral left) (mkSource completed)
 
   where
     -- e.g. Content-Range: bytes 43-1999999/2000000

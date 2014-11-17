@@ -7,7 +7,9 @@
 -- See also: @"Network.Google.Drive.Upload"@
 --
 module Network.Google.Drive.File
-    ( File(..)
+    (
+    -- * File Resources
+      File(..)
     , FileId
     , FileData(..)
     , fileId
@@ -16,13 +18,18 @@ module Network.Google.Drive.File
     , uploadPath
     , uploadData
     , localPath
+
+    -- * Search
     , Query(..)
     , Items(..)
+
+    -- * API actions
     , getFile
-    , insertFile
     , listFiles
-    , newFolder
+
+    -- * Utilities
     , newFile
+    , createFolder
     ) where
 
 import Control.Applicative ((<$>), (<*>))
@@ -80,8 +87,7 @@ uploadPath (File fid _) = "/files/" <> T.unpack fid
 uploadPath (New _) = "/files"
 
 uploadData :: File -> FileData
-uploadData (File _ fd) = fd
-uploadData (New fd) = fd
+uploadData = fileData
 
 localPath :: File -> FilePath
 localPath = T.unpack . fileTitle . fileData
@@ -133,10 +139,6 @@ baseUrl = "https://www.googleapis.com/drive/v2"
 getFile :: FileId -> Api File
 getFile fid = getJSON (baseUrl <> "/files/" <> T.unpack fid) []
 
-insertFile :: File -> Api File
-insertFile (New fd) = postJSON (baseUrl <> "/files") [] fd
-insertFile _ = throwApiError "Cannot insert existing file"
-
 listFiles :: Query -> Api [File]
 listFiles query = do
     Items items <- getJSON (baseUrl <> "/files")
@@ -157,19 +159,6 @@ listFiles query = do
     quote :: Text -> ByteString
     quote = ("'" <>) . (<> "'") . encodeUtf8
 
-newFolder :: FileId -> Text -> Api File
-newFolder parent title = do
-    modified <- liftIO $ getCurrentTime
-
-    return $ New $ FileData
-        { fileTitle = title
-        , fileModified = modified
-        , fileParents = [parent]
-        , fileTrashed = False
-        , fileSize = Nothing
-        , fileDownloadUrl = Nothing
-        , fileMimeType = "application/vnd.google-apps.folder"
-        }
 
 newFile :: FileId -> FilePath -> Api File
 newFile parent filePath = do
@@ -183,4 +172,18 @@ newFile parent filePath = do
         , fileSize = Nothing
         , fileDownloadUrl = Nothing
         , fileMimeType = ""
+        }
+
+createFolder :: FileId -> Text -> Api File
+createFolder parent title = do
+    modified <- liftIO $ getCurrentTime
+
+    postJSON (baseUrl <> "/files") [] $ FileData
+        { fileTitle = title
+        , fileModified = modified
+        , fileParents = [parent]
+        , fileTrashed = False
+        , fileSize = Nothing
+        , fileDownloadUrl = Nothing
+        , fileMimeType = "application/vnd.google-apps.folder"
         }
