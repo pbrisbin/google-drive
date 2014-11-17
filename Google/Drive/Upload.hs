@@ -11,7 +11,6 @@ import Data.ByteString (ByteString)
 import Data.Conduit
 import Data.Conduit.Binary (sourceFileRange)
 import Data.List (stripPrefix)
-import Data.Maybe (fromMaybe)
 import Data.Monoid ((<>))
 import Network.HTTP.Conduit
 import Network.HTTP.Types
@@ -79,13 +78,17 @@ getUploadedBytes url = do
         addHeader ("Content-Range", "bytes */*") .
         allowStatus status308
 
-    case lookup hRange $ responseHeaders response of
-        Just range -> return $ rangeEnd range
-        Nothing -> throwApiError "Resumable upload Range header missing"
+    case rangeEnd =<< lookup hRange (responseHeaders response) of
+        Just range -> return range
+
+        -- TODO: Drive API just starting responding without a Range. I'm not
+        -- sure if this is a valid response for a fresh upload (i.e. missing ==
+        -- 0 bytes completed), or if this really should be an error case.
+        Nothing -> return 0
 
   where
-    rangeEnd :: ByteString -> Int
-    rangeEnd = fromMaybe 0 . fmap read . stripPrefix "0-" . C8.unpack
+    rangeEnd :: ByteString -> Maybe Int
+    rangeEnd = fmap read . stripPrefix "0-" . C8.unpack
 
 resumeUpload :: URL
              -> Int -- ^ completed
