@@ -9,7 +9,7 @@ import Control.Monad.Trans.Resource (ResourceT)
 import Data.Aeson
 import Data.ByteString (ByteString)
 import Data.Conduit
-import Data.Conduit.Binary (sourceFileRange)
+import Data.Conduit.Binary (sourceFile, sourceFileRange)
 import Data.List (stripPrefix)
 import Data.Monoid ((<>))
 import Network.HTTP.Conduit
@@ -38,8 +38,8 @@ type UploadSource = Int -> Source (ResourceT IO) ByteString
 
 -- | Simple @UploadSource@ for uploading from a file
 uploadSourceFile :: FilePath -> UploadSource
-uploadSourceFile fp c =
-    sourceFileRange fp (Just $ fromIntegral $ c + 1) Nothing
+uploadSourceFile fp 0 = sourceFile fp
+uploadSourceFile fp c = sourceFileRange fp (Just $ fromIntegral $ c + 1) Nothing
 
 baseUrl :: URL
 baseUrl = "https://www.googleapis.com/upload/drive/v2"
