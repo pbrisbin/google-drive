@@ -1,9 +1,7 @@
 module Network.Google.Drive.Upload
     ( UploadSource
+    , uploadSourceFile
     , uploadFile
-
-    -- * Re-exports
-    , sourceFileRange
     ) where
 
 import Control.Concurrent (threadDelay)
@@ -37,14 +35,12 @@ import Network.Google.Drive.File
 --   resumable, each invocation will give your @UploadSource@ the bytes
 --   completed so far, so you may create an appropriately offset source (i.e.
 --   into a file).
---
---   Example:
---
---   > \c -> sourceFileRange filePath (Just $ fromIntegral $ c + 1) Nothing
---
---   @'sourceFileRange'@ is re-exported for convenience.
---
 type UploadSource = Int -> Source (ResourceT IO) ByteString
+
+-- | Simple @UploadSource@ for uploading from a file
+uploadSourceFile :: FilePath -> UploadSource
+uploadSourceFile fp c =
+    sourceFileRange fp (Just $ fromIntegral $ c + 1) Nothing
 
 baseUrl :: URL
 baseUrl = "https://www.googleapis.com/upload/drive/v2"
