@@ -15,6 +15,7 @@ module Network.Google.Drive.File
     , uploadMethod
     , uploadPath
     , uploadData
+    , localPath
     , Query(..)
     , Items(..)
     , getFile
@@ -81,6 +82,9 @@ uploadPath (New _) = "/files"
 uploadData :: File -> FileData
 uploadData (File _ fd) = fd
 uploadData (New fd) = fd
+
+localPath :: File -> FilePath
+localPath = T.unpack . fileTitle . fileData
 
 newtype Items = Items [File]
 
