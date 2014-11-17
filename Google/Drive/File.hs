@@ -8,16 +8,16 @@
 --
 module Network.Google.Drive.File
     (
-    -- * File Resources
+    -- * File Resource
       File(..)
     , FileId
     , FileData(..)
     , fileId
     , fileData
+    , localPath
     , uploadMethod
     , uploadPath
     , uploadData
-    , localPath
 
     -- * Search
     , Query(..)
@@ -50,6 +50,7 @@ import Network.Google.Api
 
 type FileId = Text
 
+-- | Metadata about Files on your Drive
 data FileData = FileData
     { fileTitle :: !Text
     , fileModified :: !UTCTime
@@ -60,7 +61,9 @@ data FileData = FileData
     , fileMimeType :: !Text
     }
 
-data File = File FileId FileData | New FileData
+data File
+    = File FileId FileData -- ^ A File that exists
+    | New FileData         -- ^ A File you intend to create
 
 instance Eq File where
     File a _ == File b _ = a == b
@@ -70,6 +73,7 @@ instance Show File where
     show (File fi fd) = T.unpack $ fileTitle fd <> " (" <> fi <> ")"
     show (New fd) = show $ File "new" fd
 
+-- | N.B. it is an error to ask for the @fileId@ of a new file
 fileId :: File -> FileId
 fileId (File x _) = x
 fileId _ = error "Cannot get fileId for new File"
@@ -78,17 +82,27 @@ fileData :: File -> FileData
 fileData (File _ x) = x
 fileData (New x) = x
 
+-- | HTTP Method to use for uploading content for this file
 uploadMethod :: File -> Method
 uploadMethod (File _ _) = "PUT"
 uploadMethod (New _) = "POST"
 
+-- | Path to use for uploading content for this file
 uploadPath :: File -> Path
 uploadPath (File fid _) = "/files/" <> T.unpack fid
 uploadPath (New _) = "/files"
 
+-- | HTTP Body to send when uploading content for this file
+--
+-- Currently a synonym for @fileData@.
+--
 uploadData :: File -> FileData
 uploadData = fileData
 
+-- | What to name this file if downloaded
+--
+-- Currently just the @fileTitle@
+--
 localPath :: File -> FilePath
 localPath = T.unpack . fileTitle . fileData
 
@@ -126,6 +140,10 @@ instance FromJSON Items where
     parseJSON (Object o) = Items <$> (mapM parseJSON =<< o .: "items")
     parseJSON _ = mzero
 
+-- | Search query parameter
+--
+-- Currently only a small subset of queries are supported
+--
 data Query
     = TitleEq Text
     | ParentEq FileId
@@ -136,9 +154,14 @@ data Query
 baseUrl :: URL
 baseUrl = "https://www.googleapis.com/drive/v2"
 
+-- | Get @File@ data by @FileId@
+--
+-- @\"root\"@ can be used to get information on the Drive itself
+--
 getFile :: FileId -> Api File
 getFile fid = getJSON (baseUrl <> "/files/" <> T.unpack fid) []
 
+-- | Perform a search as specified by the @Query@
 listFiles :: Query -> Api [File]
 listFiles query = do
     Items items <- getJSON (baseUrl <> "/files")
@@ -159,7 +182,11 @@ listFiles query = do
     quote :: Text -> ByteString
     quote = ("'" <>) . (<> "'") . encodeUtf8
 
-
+-- | Build a new @File@
+--
+-- The file is defined as within the given parent, and has some information
+-- (currently title and modified) taken from the local file
+--
 newFile :: FileId -> FilePath -> Api File
 newFile parent filePath = do
     modified <- liftIO $ getModificationTime filePath
@@ -174,6 +201,7 @@ newFile parent filePath = do
         , fileMimeType = ""
         }
 
+-- | Create a new remote folder
 createFolder :: FileId -> Text -> Api File
 createFolder parent title = do
     modified <- liftIO $ getCurrentTime

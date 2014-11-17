@@ -1,6 +1,9 @@
 module Network.Google.Drive.Upload
     ( UploadSource
     , uploadFile
+
+    -- * Re-exports
+    , sourceFileRange
     ) where
 
 import Control.Concurrent (threadDelay)
@@ -8,6 +11,7 @@ import Control.Monad.Trans.Resource (ResourceT)
 import Data.Aeson
 import Data.ByteString (ByteString)
 import Data.Conduit
+import Data.Conduit.Binary (sourceFileRange)
 import Data.List (stripPrefix)
 import Data.Maybe (fromMaybe)
 import Data.Monoid ((<>))
@@ -28,6 +32,18 @@ import qualified Data.ByteString.Char8 as C8
 import Network.Google.Api
 import Network.Google.Drive.File
 
+-- | Uploads use sources for space efficiency and so that callers can implement
+--   things like throttling or progress output themselves. Since uploads are
+--   resumable, each invocation will give your @UploadSource@ the bytes
+--   completed so far, so you may create an appropriately offset source (i.e.
+--   into a file).
+--
+--   Example:
+--
+--   > \c -> sourceFileRange filePath (Just $ fromIntegral $ c + 1) Nothing
+--
+--   @'sourceFileRange'@ is re-exported for convenience.
+--
 type UploadSource = Int -> Source (ResourceT IO) ByteString
 
 baseUrl :: URL
