@@ -97,14 +97,16 @@ resumeUpload :: URL
              -> Api File
 resumeUpload url completed fileLength mkSource = do
     let left = fileLength - completed
-        range = nextRange completed fileLength
 
     requestJSON url $
         setMethod "PUT" .
-        addHeader ("Content-Range", range) .
+        addRange completed .
         setBodySource (fromIntegral left) (mkSource completed)
 
   where
+    addRange 0 = id
+    addRange c = addHeader ("Content-Range", nextRange c fileLength)
+
     -- e.g. Content-Range: bytes 43-1999999/2000000
     nextRange c t = C8.pack $
         "bytes " <> show (c + 1) <> "-" <> show (t - 1) <> "/" <> show t
