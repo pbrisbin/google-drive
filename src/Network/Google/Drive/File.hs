@@ -28,6 +28,7 @@ module Network.Google.Drive.File
 
     -- * API actions
     , getFile
+    , deleteFile
     , listFiles
 
     -- * Utilities
@@ -36,7 +37,7 @@ module Network.Google.Drive.File
     ) where
 
 import Control.Applicative ((<$>), (<*>))
-import Control.Monad (mzero)
+import Control.Monad (mzero, void)
 import Data.Aeson
 import Data.ByteString (ByteString)
 import Data.Monoid ((<>))
@@ -166,6 +167,12 @@ baseUrl = "https://www.googleapis.com/drive/v2"
 --
 getFile :: FileId -> Api File
 getFile fid = getJSON (baseUrl <> "/files/" <> T.unpack fid) []
+
+-- | Delete a @File@
+deleteFile :: File -> Api ()
+deleteFile (New _) = return ()
+deleteFile (File fid _) = void $ requestLbs
+    (baseUrl <> "/files/" <> T.unpack fid) $ setMethod "DELETE"
 
 -- | Perform a search as specified by the @Query@
 listFiles :: Query -> Api [File]
