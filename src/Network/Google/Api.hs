@@ -156,7 +156,7 @@ addHeader header request =
     request { requestHeaders = header:requestHeaders request }
 
 setMethod :: Method -> Request -> Request
-setMethod method request = request { method = method }
+setMethod m request = request { method = m }
 
 setBody :: BL.ByteString -> Request -> Request
 setBody bs request = request { requestBody = RequestBodyLBS bs }
