@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings #-}
 -- |
 --
 -- Actions for working with any of Google's APIs

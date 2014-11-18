@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings #-}
 module Network.Google.Drive.Upload
     ( UploadSource
     , uploadSourceFile
