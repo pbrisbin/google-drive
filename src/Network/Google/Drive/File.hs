@@ -134,7 +134,7 @@ instance ToJSON FileData where
     toJSON FileData{..} = object
         [ "title" .= fileTitle
         , "modifiedDate" .= fileModified
-        , "parents" .= object (map ("id" .=) $ fileParents)
+        , "parents" .= map (\p -> object ["id" .= p]) fileParents
         , "labels" .= object ["trashed" .= fileTrashed]
         , "mimeType" .= fileMimeType
         ]
