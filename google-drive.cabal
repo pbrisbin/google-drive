@@ -1,0 +1,52 @@
+Name:                   google-drive
+Version:                0.0.0
+Author:                 Pat Brisbin <pbrisbin@gmail.com>
+Maintainer:             Pat Brisbin <pbrisbin@gmail.com>
+License:                MIT
+License-File:           LICENSE
+-- Synopsis:               Short description, appears in Hackage listings
+-- Description:            Long explanation, appears at top of project page
+Cabal-Version:          >= 1.10
+Build-Type:             Simple
+
+Library
+  Default-Language:     Haskell2010
+  HS-Source-Dirs:       src
+  GHC-Options:          -Wall
+  Exposed-Modules:      Network.Google.Api
+                      , Network.Google.Drive
+                      , Network.Google.Drive.File
+                      , Network.Google.Drive.Upload
+  Build-Depends:        base            >= 4            && < 5
+                      , aeson           >= 0.8          && < 1.0
+                      , bytestring
+                      , conduit
+                      , conduit-extra   >= 1.1.4        && < 1.2
+                      , directory
+                      , filepath
+                      , http-conduit    >= 2.1          && < 2.2
+                      , http-types
+                      , mtl
+                      , random
+                      , resourcet
+                      , text
+                      , time
+
+Test-Suite spec
+  Type:                 exitcode-stdio-1.0
+  Default-Language:     Haskell2010
+  Hs-Source-Dirs:       test
+  Ghc-Options:          -Wall
+  Main-Is:              Spec.hs
+  Build-Depends:        base
+                      , hspec
+                      , google-drive
+                      , google-oauth2
+                      , conduit
+                      , directory
+                      , load-env
+                      , text
+
+Source-Repository head
+  Type:                 git
+  Location:             https://github.com/pbrisbin/google-drive
