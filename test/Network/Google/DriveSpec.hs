@@ -40,8 +40,7 @@ spec = after_ cleanup $ describe "Drive API" $
 
             liftIO $ murl `shouldSatisfy` isJust
 
-            getSource (T.unpack $ fromJust murl) [] $ \source ->
-                source $$+- sinkFile dFilePath
+            getSource (T.unpack $ fromJust murl) [] ($$+- sinkFile dFilePath)
 
             deleteFile file
             deleteFile folder
