@@ -4,6 +4,8 @@
 --
 module Network.Google.Drive
     ( driveScopes
+
+    -- * Re-exports
     , module X
     ) where
 
