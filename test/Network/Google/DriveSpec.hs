@@ -60,10 +60,7 @@ getToken = do
         <$> getEnv "CLIENT_ID"
         <*> getEnv "CLIENT_SECRET"
 
-    cache <- getEnv "CACHE_FILE"
-
-    getAccessToken client
-        ["https://www.googleapis.com/auth/drive"] $ Just cache
+    getAccessToken client driveScopes . Just =<< getEnv "CACHE_FILE"
 
 getFileSize :: FilePath -> IO Int
 getFileSize fp = fromIntegral <$> withFile fp ReadMode hFileSize
