@@ -1,3 +1,4 @@
+{-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE OverloadedStrings #-}
 -- |
 --
@@ -11,6 +12,7 @@ module Network.Google.Api
       Api
     , ApiError(..)
     , runApi
+    , runApi_
     , throwApiError
 
     -- * HTTP-related types
@@ -55,6 +57,7 @@ import Data.ByteString (ByteString)
 import Data.Conduit
 import Data.Conduit.Binary (sinkFile)
 import Data.Monoid ((<>))
+import Data.Typeable
 import GHC.Int (Int64)
 import Network.HTTP.Conduit
     ( HttpException(..)
@@ -91,14 +94,17 @@ data ApiError
     = HttpError HttpException -- ^ Exceptions raised by http-conduit
     | InvalidJSON String      -- ^ Failure to parse a response as JSON
     | GenericError String     -- ^ All other errors
-
-instance Error ApiError where
-    strMsg = GenericError
+    deriving Typeable
 
 instance Show ApiError where
     show (HttpError ex) = "HTTP Exception: " <> show ex
     show (InvalidJSON msg) = "failure parsing JSON: " <> msg
     show (GenericError msg) = msg
+
+instance Error ApiError where
+    strMsg = GenericError
+
+instance E.Exception ApiError
 
 -- | A transformer stack for providing the access token and rescuing errors
 type Api = ReaderT String (ErrorT ApiError IO)
@@ -108,6 +114,10 @@ runApi :: String -- ^ OAuth2 access token
        -> Api a
        -> IO (Either ApiError a)
 runApi token f = runErrorT $ runReaderT f token
+
+-- | Like @runApi@ but discards the result and raises @ApiError@s as exceptions
+runApi_ :: String -> Api a -> IO ()
+runApi_ token f = either E.throw (const $ return ()) =<< runApi token f
 
 -- | Abort an @Api@ computation with the given message
 throwApiError :: String -> Api a

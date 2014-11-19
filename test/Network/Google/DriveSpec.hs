@@ -28,7 +28,7 @@ spec = after_ cleanup $ describe "Drive API" $
 
         token <- getToken
 
-        void $ runApi token $ do
+        runApi_ token $ do
             root <- getFile "root"
 
             folder <- createFolder (fileId root) "google-drive-test"
@@ -45,8 +45,6 @@ spec = after_ cleanup $ describe "Drive API" $
 
             deleteFile file
             deleteFile folder
-
-            return ()
 
         content <- readFile dFilePath
         content `shouldBe` fileContents
