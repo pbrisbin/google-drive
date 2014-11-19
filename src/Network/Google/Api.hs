@@ -3,14 +3,20 @@
 --
 -- Actions for working with any of Google's APIs
 --
+-- Note: this module may become a standalone package at some point.
+--
 module Network.Google.Api
-    ( Api
+    (
+    -- * The Api monad
+      Api
     , ApiError(..)
+    , runApi
+    , throwApiError
+
+    -- * HTTP-related types
     , URL
     , Path
     , Params
-    , runApi
-    , throwApiError
 
     -- * High-level requests
     , DownloadSink
@@ -18,20 +24,20 @@ module Network.Google.Api
     , getSource
     , postJSON
 
-    -- * Lower-level request
+    -- * Lower-level requests
     , requestJSON
     , requestLbs
 
     -- * Api helpers
+    , authorize
     , decodeBody
 
     -- * Request helpers
-    , authorize
     , addHeader
-    , setMethod
+    , allowStatus
     , setBody
     , setBodySource
-    , allowStatus
+    , setMethod
 
     -- * Re-exports
     , liftIO
@@ -77,14 +83,14 @@ import qualified Data.ByteString.Lazy as BL
 
 -- | Downloads use sinks for space efficiency and so that callers can implement
 --   things like throttling or progress output themselves. If you just want to
---   download to a file use the re-exported @'sinkFile'@
+--   download to a file, use the re-exported @'sinkFile'@
 type DownloadSink a =
     ResumableSource (ResourceT IO) ByteString -> ResourceT IO a
 
 data ApiError
-    = HttpError HttpException
-    | InvalidJSON String
-    | GenericError String
+    = HttpError HttpException -- ^ Exceptions raised by http-conduit
+    | InvalidJSON String      -- ^ Failure to parse a response as JSON
+    | GenericError String     -- ^ All other errors
 
 instance Error ApiError where
     strMsg = GenericError
@@ -94,11 +100,16 @@ instance Show ApiError where
     show (InvalidJSON msg) = "failure parsing JSON: " <> msg
     show (GenericError msg) = msg
 
+-- | A transformer stack for providing the access token and rescuing errors
 type Api = ReaderT String (ErrorT ApiError IO)
 
-runApi :: String -> Api a -> IO (Either ApiError a)
+-- | Run an @Api@ computation with the given Access token
+runApi :: String -- ^ OAuth2 access token
+       -> Api a
+       -> IO (Either ApiError a)
 runApi token f = runErrorT $ runReaderT f token
 
+-- | Abort an @Api@ computation with the given message
 throwApiError :: String -> Api a
 throwApiError = throwError . GenericError
 

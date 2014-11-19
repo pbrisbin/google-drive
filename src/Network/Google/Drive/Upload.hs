@@ -1,4 +1,12 @@
 {-# LANGUAGE OverloadedStrings #-}
+-- |
+--
+-- Resumable uploads
+--
+-- https://developers.google.com/drive/web/manage-uploads#resumable
+--
+-- Note: actual resuming of uploads on errors is currently untested.
+--
 module Network.Google.Drive.Upload
     ( UploadSource
     , uploadSourceFile
@@ -45,7 +53,10 @@ uploadSourceFile fp c = sourceFileRange fp (Just $ fromIntegral $ c + 1) Nothing
 baseUrl :: URL
 baseUrl = "https://www.googleapis.com/upload/drive/v2"
 
-uploadFile :: File -> Int -> UploadSource -> Api File
+uploadFile :: File -- ^ New or existing @File@
+           -> Int  -- ^ Length of source
+           -> UploadSource
+           -> Api File
 uploadFile file fileLength mkSource =
     withSessionUrl file $ \url -> do
         retryWithBackoff 1 $ do
@@ -91,11 +102,7 @@ getUploadedBytes url = do
     rangeEnd :: ByteString -> Maybe Int
     rangeEnd = fmap read . stripPrefix "0-" . C8.unpack
 
-resumeUpload :: URL
-             -> Int -- ^ completed
-             -> Int -- ^ total
-             -> UploadSource
-             -> Api File
+resumeUpload :: URL -> Int -> Int -> UploadSource -> Api File
 resumeUpload url completed fileLength mkSource = do
     let left = fileLength - completed
 

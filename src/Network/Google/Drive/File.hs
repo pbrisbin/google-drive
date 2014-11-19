@@ -6,7 +6,7 @@
 --
 -- https://developers.google.com/drive/v2/reference/files
 --
--- See also: @"Network.Google.Drive.Upload"@
+-- See @"Network.Google.Drive.Upload"@ for uploading files.
 --
 module Network.Google.Drive.File
     (
@@ -25,11 +25,11 @@ module Network.Google.Drive.File
     -- * Search
     , Query(..)
     , Items(..)
+    , listFiles
 
-    -- * API actions
+    -- * Actions
     , getFile
     , deleteFile
-    , listFiles
 
     -- * Utilities
     , newFile
@@ -197,10 +197,14 @@ listFiles query = do
 
 -- | Build a new @File@
 --
+-- N.B. This does not create the file.
+--
 -- The file is defined as within the given parent, and has some information
 -- (currently title and modified) taken from the local file
 --
-newFile :: FileId -> FilePath -> Api File
+newFile :: FileId   -- ^ Parent
+        -> FilePath
+        -> Api File
 newFile parent filePath = do
     modified <- liftIO $ getModificationTime filePath
 
@@ -215,7 +219,9 @@ newFile parent filePath = do
         }
 
 -- | Create a new remote folder
-createFolder :: FileId -> Text -> Api File
+createFolder :: FileId -- ^ Parent
+             -> Text   -- ^ Title to give the folder
+             -> Api File
 createFolder parent title = do
     modified <- liftIO $ getCurrentTime
 
