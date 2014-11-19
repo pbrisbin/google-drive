@@ -20,6 +20,7 @@ import Data.ByteString (ByteString)
 import Data.Conduit
 import Data.Conduit.Binary (sourceFile, sourceFileRange)
 import Data.List (stripPrefix)
+import Data.Maybe (fromMaybe)
 import Data.Monoid ((<>))
 import Network.HTTP.Conduit
 import Network.HTTP.Types
@@ -90,13 +91,7 @@ getUploadedBytes url = do
         addHeader ("Content-Range", "bytes */*") .
         allowStatus status308
 
-    case rangeEnd =<< lookup hRange (responseHeaders response) of
-        Just range -> return range
-
-        -- TODO: Drive API just starting responding without a Range. I'm not
-        -- sure if this is a valid response for a fresh upload (i.e. missing ==
-        -- 0 bytes completed), or if this really should be an error case.
-        Nothing -> return 0
+    return $ fromMaybe 0 $ rangeEnd =<< lookup hRange (responseHeaders response)
 
   where
     rangeEnd :: ByteString -> Maybe Int
