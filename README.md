@@ -1,6 +1,6 @@
 # Google Drive
 
-Google Drive API token
+Google Drive API access
 
 ## Installation
 
