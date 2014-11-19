@@ -182,7 +182,7 @@ listFiles query = do
         , ("maxResults", Just "1000")
         ]
 
-    return $ items
+    return items
 
   where
     toParam :: Query -> ByteString
@@ -208,7 +208,7 @@ newFile :: FileId   -- ^ Parent
 newFile parent filePath = do
     modified <- liftIO $ getModificationTime filePath
 
-    return $ New $ FileData
+    return $ New FileData
         { fileTitle = T.pack $ takeFileName filePath
         , fileModified = modified
         , fileParents = [parent]
@@ -223,9 +223,9 @@ createFolder :: FileId -- ^ Parent
              -> Text   -- ^ Title to give the folder
              -> Api File
 createFolder parent title = do
-    modified <- liftIO $ getCurrentTime
+    modified <- liftIO getCurrentTime
 
-    postJSON (baseUrl <> "/files") [] $ FileData
+    postJSON (baseUrl <> "/files") [] FileData
         { fileTitle = title
         , fileModified = modified
         , fileParents = [parent]

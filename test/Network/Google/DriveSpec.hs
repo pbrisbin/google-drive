@@ -21,36 +21,35 @@ main = hspec spec
 
 -- N.B. requires interaction once, then uses cached OAuth credentials
 spec :: Spec
-spec = after_ cleanup $ do
-    describe "Drive API" $ do
-        it "can upload, list, and delete files" $ do
-            writeFile uFilePath fileContents
-            fileLength <- getFileSize uFilePath
+spec = after_ cleanup $ describe "Drive API" $
+    it "can upload, list, and delete files" $ do
+        writeFile uFilePath fileContents
+        fileLength <- getFileSize uFilePath
 
-            token <- getToken
+        token <- getToken
 
-            void $ runApi token $ do
-                root <- getFile "root"
+        void $ runApi token $ do
+            root <- getFile "root"
 
-                folder <- createFolder (fileId root) "google-drive-test"
-                file <- newFile (fileId folder) uFilePath
-                void $ uploadFile file fileLength $ uploadSourceFile uFilePath
+            folder <- createFolder (fileId root) "google-drive-test"
+            file <- newFile (fileId folder) uFilePath
+            void $ uploadFile file fileLength $ uploadSourceFile uFilePath
 
-                items <- listFiles $ ParentEq $ fileId folder
-                let murl = fileDownloadUrl . fileData =<< listToMaybe items
+            items <- listFiles $ ParentEq $ fileId folder
+            let murl = fileDownloadUrl . fileData =<< listToMaybe items
 
-                liftIO $ murl `shouldSatisfy` isJust
+            liftIO $ murl `shouldSatisfy` isJust
 
-                getSource (T.unpack $ fromJust murl) [] $ \source ->
-                    source $$+- sinkFile dFilePath
+            getSource (T.unpack $ fromJust murl) [] $ \source ->
+                source $$+- sinkFile dFilePath
 
-                deleteFile file
-                deleteFile folder
+            deleteFile file
+            deleteFile folder
 
-                return ()
+            return ()
 
-            content <- readFile dFilePath
-            content `shouldBe` fileContents
+        content <- readFile dFilePath
+        content `shouldBe` fileContents
 
 getToken :: IO OAuth2Token
 getToken = do

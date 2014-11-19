@@ -59,7 +59,7 @@ uploadFile :: File -- ^ New or existing @File@
            -> UploadSource
            -> Api File
 uploadFile file fileLength mkSource =
-    withSessionUrl file $ \url -> do
+    withSessionUrl file $ \url ->
         retryWithBackoff 1 $ do
             completed <- getUploadedBytes url
             resumeUpload url completed fileLength mkSource
