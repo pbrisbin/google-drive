@@ -64,13 +64,16 @@ import Network.HTTP.Conduit
     , Request(..)
     , RequestBody(..)
     , Response(..)
+    , Manager
+    , conduitManagerSettings
+    , closeManager
     , http
     , httpLbs
+    , newManager
     , parseUrl
     , requestBodySource
     , responseBody
     , setQueryString
-    , withManager
     )
 import Network.HTTP.Types
     ( Header
@@ -107,13 +110,15 @@ instance Error ApiError where
 instance E.Exception ApiError
 
 -- | A transformer stack for providing the access token and rescuing errors
-type Api = ReaderT String (ErrorT ApiError IO)
+type Api = ReaderT (String, Manager) (ErrorT ApiError IO)
 
 -- | Run an @Api@ computation with the given Access token
 runApi :: String -- ^ OAuth2 access token
        -> Api a
        -> IO (Either ApiError a)
-runApi token f = runErrorT $ runReaderT f token
+runApi token f =
+    E.bracket (newManager conduitManagerSettings) closeManager $ \manager ->
+        runErrorT $ runReaderT f (token, manager)
 
 -- | Like @runApi@ but discards the result and raises @ApiError@s as exceptions
 runApi_ :: String -> Api a -> IO ()
@@ -136,7 +141,7 @@ getSource :: URL -> Params -> DownloadSink a -> Api a
 getSource url params withSource = do
     request <- setQueryString params <$> authorize url
 
-    tryHttp $ withManager $ \manager -> do
+    withManager' $ \manager -> do
         response <- http request manager
         withSource $ responseBody response
 
@@ -160,12 +165,13 @@ requestLbs :: URL -> (Request -> Request) -> Api (Response BL.ByteString)
 requestLbs url modify = do
     request <- authorize url
 
-    tryHttp $ withManager $ httpLbs $ modify request
+    withManager' $ httpLbs $ modify request
 
 -- | Create an authorized request for the given URL
 authorize :: URL -> Api Request
 authorize url = do
-    token <- ask
+    (token, _) <- ask
+
     request <- parseUrl' url
 
     let authorization = C8.pack $ "Bearer " <> token
@@ -206,5 +212,10 @@ parseUrl' url = case parseUrl url of
     Just request -> return request
     Nothing -> throwApiError $ "Invalid URL: " <> url
 
-tryHttp :: IO a -> Api a
-tryHttp = either (throwError . HttpError) return <=< liftIO . E.try
+withManager' :: (Manager -> ResourceT IO a) -> Api a
+withManager' f = do
+    (_, manager) <- ask
+
+    result <- liftIO $ E.try $ runResourceT $ f manager
+
+    either (throwError . HttpError) return result
