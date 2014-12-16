@@ -14,49 +14,48 @@ module Network.Google.Drive.File
       File(..)
     , FileId
     , FileData(..)
-    , fileId
-    , fileData
-    , isFolder
-    , localPath
-    , uploadMethod
-    , uploadPath
-    , uploadData
+    , FileTitle
 
-    -- * Search
-    , Query(..)
-    , Items(..)
-    , listFiles
+    -- * Building @File@s
+    , newFile
+    , newFolder
+    , setParent
+    , setMimeType
 
     -- * Actions
     , getFile
+    , createFile
+    , updateFile
     , deleteFile
+    , downloadFile
 
     -- * Utilities
-    , newFile
-    , createFolder
+    , isFolder
+    , isDownloadable
+    , localPath
     ) where
+
+import Network.Google.Api
 
 import Control.Applicative ((<$>), (<*>))
 import Control.Monad (mzero, void)
 import Data.Aeson
-import Data.ByteString (ByteString)
+import Data.Maybe (isJust)
 import Data.Monoid ((<>))
 import Data.Text (Text)
-import Data.Text.Encoding (encodeUtf8)
-import Data.Time (UTCTime, getCurrentTime)
-import Network.HTTP.Types (Method)
-import System.Directory (getModificationTime)
-import System.FilePath (takeFileName)
+import Data.Time (UTCTime)
+import Network.HTTP.Conduit (HttpException(..))
+import Network.HTTP.Types (status404)
 
+import qualified Data.Traversable as F
 import qualified Data.Text as T
 
-import Network.Google.Api
-
 type FileId = Text
+type FileTitle = Text
 
 -- | Metadata about Files on your Drive
 data FileData = FileData
-    { fileTitle :: !Text
+    { fileTitle :: !FileTitle
     , fileModified :: !UTCTime
     , fileParents :: ![FileId]
     , fileTrashed :: !Bool
@@ -65,52 +64,17 @@ data FileData = FileData
     , fileMimeType :: !Text
     }
 
-data File
-    = File FileId FileData -- ^ A File that exists
-    | New FileData         -- ^ A File you intend to create
+-- | An existing file
+data File = File
+    { fileId :: FileId
+    , fileData :: FileData
+    }
 
 instance Eq File where
-    File a _ == File b _ = a == b
-    _ == _ = False
+    a == b = fileId a == fileId b
 
 instance Show File where
-    show (File fi fd) = T.unpack $ fileTitle fd <> " (" <> fi <> ")"
-    show (New fd) = show $ File "new" fd
-
--- | N.B. it is an error to ask for the @fileId@ of a new file
-fileId :: File -> FileId
-fileId (File x _) = x
-fileId _ = error "Cannot get fileId for new File"
-
-fileData :: File -> FileData
-fileData (File _ x) = x
-fileData (New x) = x
-
--- | HTTP Method to use for uploading content for this file
-uploadMethod :: File -> Method
-uploadMethod (File _ _) = "PUT"
-uploadMethod (New _) = "POST"
-
--- | Path to use for uploading content for this file
-uploadPath :: File -> Path
-uploadPath (File fid _) = "/files/" <> T.unpack fid
-uploadPath (New _) = "/files"
-
--- | HTTP Body to send when uploading content for this file
---
--- Currently a synonym for @fileData@.
---
-uploadData :: File -> FileData
-uploadData = fileData
-
--- | What to name this file if downloaded
---
--- Currently just the @fileTitle@
---
-localPath :: File -> FilePath
-localPath = T.unpack . fileTitle . fileData
-
-newtype Items = Items [File]
+    show f = localPath f <> " (" <> T.unpack (fileId f) <> ")"
 
 instance FromJSON FileData where
     parseJSON (Object o) = FileData
@@ -124,13 +88,6 @@ instance FromJSON FileData where
 
     parseJSON _ = mzero
 
-instance FromJSON File where
-    parseJSON v@(Object o) = File
-        <$> o .: "id"
-        <*> parseJSON v
-
-    parseJSON _ = mzero
-
 instance ToJSON FileData where
     toJSON FileData{..} = object
         [ "title" .= fileTitle
@@ -140,100 +97,85 @@ instance ToJSON FileData where
         , "mimeType" .= fileMimeType
         ]
 
-instance FromJSON Items where
-    parseJSON (Object o) = Items <$> (mapM parseJSON =<< o .: "items")
+instance FromJSON File where
+    parseJSON v@(Object o) = File
+        <$> o .: "id"
+        <*> parseJSON v
     parseJSON _ = mzero
 
+-- | Get a @File@ data by @FileId@
+--
+-- @\"root\"@ can be used to get information on the Drive itself
+--
+getFile :: FileId -> Api (Maybe File)
+getFile fid = (Just <$> getJSON (fileUrl fid) [])
+    `catchError` handleNotFound
+
+  where
+    handleNotFound (HttpError (StatusCodeException s _ _))
+        | s == status404 = return Nothing
+    handleNotFound e = throwError e
+
+-- | Create a @File@ from @FileData@
+createFile :: FileData -> Api File
+createFile fd = postJSON (baseUrl <> "/files") [] fd
+
+-- | Update a @File@
+updateFile :: File -> Api File
+updateFile f = putJSON (fileUrl $ fileId f) [] $ fileData f
+
+-- | Delete a @File@
+deleteFile :: File -> Api ()
+deleteFile f = void $ requestLbs (fileUrl $ fileId f) $ setMethod "DELETE"
+
+-- | Download a @File@
+--
+-- Returns @Nothing@ if the file is not downloadable
+--
+downloadFile :: File -> DownloadSink a -> Api (Maybe a)
+downloadFile f sink = F.forM (fileDownloadUrl $ fileData f) $ \url ->
+    getSource (T.unpack url) [] sink
+
+newFile :: FileTitle -> UTCTime -> FileData
+newFile title modified = FileData
+    { fileTitle = title
+    , fileModified = modified
+    , fileParents = []
+    , fileTrashed = False
+    , fileSize = Nothing
+    , fileDownloadUrl = Nothing
+    , fileMimeType = ""
+    }
+
+newFolder :: FileTitle -> UTCTime -> FileData
+newFolder title = setMimeType folderMimeType . newFile title
+
+setParent :: File -> FileData -> FileData
+setParent p f = f { fileParents = [fileId p] }
+
+setMimeType :: Text -> FileData -> FileData
+setMimeType m f = f { fileMimeType = m }
+
+-- | What to name this file if downloaded
+--
+-- Currently just the @fileTitle@
+--
+localPath :: File -> FilePath
+localPath = T.unpack . fileTitle . fileData
+
+-- | Check if a @File@ is a folder by inspecting its mime-type
 isFolder :: File -> Bool
 isFolder = (== folderMimeType) . fileMimeType . fileData
 
--- | Search query parameter
---
--- Currently only a small subset of queries are supported
---
-data Query
-    = TitleEq Text
-    | ParentEq FileId
-    | Untrashed
-    | Query `And` Query
-    | Query `Or` Query
+-- | Check if a @File@ has content stored in drive
+isDownloadable :: File -> Bool
+isDownloadable = isJust . fileDownloadUrl . fileData
 
 baseUrl :: URL
 baseUrl = "https://www.googleapis.com/drive/v2"
 
--- | Get @File@ data by @FileId@
---
--- @\"root\"@ can be used to get information on the Drive itself
---
-getFile :: FileId -> Api File
-getFile fid = getJSON (baseUrl <> "/files/" <> T.unpack fid) []
-
--- | Delete a @File@
-deleteFile :: File -> Api ()
-deleteFile (New _) = return ()
-deleteFile (File fid _) = void $ requestLbs
-    (baseUrl <> "/files/" <> T.unpack fid) $ setMethod "DELETE"
-
--- | Perform a search as specified by the @Query@
-listFiles :: Query -> Api [File]
-listFiles query = do
-    Items items <- getJSON (baseUrl <> "/files")
-        [ ("q", Just $ toParam query)
-        , ("maxResults", Just "1000")
-        ]
-
-    return items
-
-  where
-    toParam :: Query -> ByteString
-    toParam (TitleEq title) = "title = " <> quote title
-    toParam (ParentEq fid) = quote fid <> " in parents"
-    toParam Untrashed = "trashed = false"
-    toParam (p `And` q) = "(" <> toParam p <> ") and (" <> toParam q <> ")"
-    toParam (p `Or` q) = "(" <> toParam p <> ") or (" <> toParam q <> ")"
-
-    quote :: Text -> ByteString
-    quote = ("'" <>) . (<> "'") . encodeUtf8
-
--- | Build a new @File@
---
--- N.B. This does not create the file.
---
--- The file is defined as within the given parent, and has some information
--- (currently title and modified) taken from the local file
---
-newFile :: FileId   -- ^ Parent
-        -> FilePath
-        -> Api File
-newFile parent filePath = do
-    modified <- liftIO $ getModificationTime filePath
-
-    return $ New FileData
-        { fileTitle = T.pack $ takeFileName filePath
-        , fileModified = modified
-        , fileParents = [parent]
-        , fileTrashed = False
-        , fileSize = Nothing
-        , fileDownloadUrl = Nothing
-        , fileMimeType = ""
-        }
-
--- | Create a new remote folder
-createFolder :: FileId -- ^ Parent
-             -> Text   -- ^ Title to give the folder
-             -> Api File
-createFolder parent title = do
-    modified <- liftIO getCurrentTime
-
-    postJSON (baseUrl <> "/files") [] FileData
-        { fileTitle = title
-        , fileModified = modified
-        , fileParents = [parent]
-        , fileTrashed = False
-        , fileSize = Nothing
-        , fileDownloadUrl = Nothing
-        , fileMimeType = folderMimeType
-        }
+fileUrl :: FileId -> URL
+fileUrl fid = baseUrl <> "/files/" <> T.unpack fid
 
 folderMimeType :: Text
 folderMimeType = "application/vnd.google-apps.folder"

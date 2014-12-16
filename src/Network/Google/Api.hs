@@ -25,6 +25,7 @@ module Network.Google.Api
     , getJSON
     , getSource
     , postJSON
+    , putJSON
 
     -- * Lower-level requests
     , requestJSON
@@ -151,6 +152,15 @@ postJSON url params body =
     requestJSON url $
         addHeader (hContentType, "application/json") .
         setMethod "POST" .
+        setQueryString params .
+        setBody (encode body)
+
+-- | Make an authorized PUT request for JSON
+putJSON :: (ToJSON a, FromJSON b) => URL -> Params -> a -> Api b
+putJSON url params body =
+    requestJSON url $
+        addHeader (hContentType, "application/json") .
+        setMethod "PUT" .
         setQueryString params .
         setBody (encode body)
 
