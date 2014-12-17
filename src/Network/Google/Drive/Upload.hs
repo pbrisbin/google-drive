@@ -10,7 +10,8 @@
 module Network.Google.Drive.Upload
     ( UploadSource
     , uploadSourceFile
-    , uploadFile
+    , createFileWithContent
+    , updateFileWithContent
     ) where
 
 import Control.Concurrent (threadDelay)
@@ -24,7 +25,8 @@ import Data.Maybe (fromMaybe)
 import Data.Monoid ((<>))
 import Network.HTTP.Conduit
 import Network.HTTP.Types
-    ( Status
+    ( Method
+    , Status
     , hContentLength
     , hContentType
     , hLocation
@@ -35,6 +37,7 @@ import Network.HTTP.Types
 import System.Random (randomRIO)
 
 import qualified Data.ByteString.Char8 as C8
+import qualified Data.Text as T
 
 import Network.Google.Api
 import Network.Google.Drive.File
@@ -51,25 +54,26 @@ uploadSourceFile :: FilePath -> UploadSource
 uploadSourceFile fp 0 = sourceFile fp
 uploadSourceFile fp c = sourceFileRange fp (Just $ fromIntegral $ c + 1) Nothing
 
-baseUrl :: URL
-baseUrl = "https://www.googleapis.com/upload/drive/v2"
+createFileWithContent :: FileData -> Int -> UploadSource -> Api File
+createFileWithContent = uploadContent "POST" "/files"
 
-uploadFile :: File -- ^ New or existing @File@
-           -> Int  -- ^ Length of source
-           -> UploadSource
-           -> Api File
-uploadFile file fileLength mkSource =
-    withSessionUrl file $ \url ->
+updateFileWithContent :: FileId -> FileData -> Int -> UploadSource -> Api File
+updateFileWithContent fid fd =
+    uploadContent "PUT" ("/files/" <> T.unpack fid) $ fd
+
+uploadContent :: Method -> Path -> FileData -> Int -> UploadSource -> Api File
+uploadContent m p fd fl mkSource =
+    withSessionUrl m p fd $ \url ->
         retryWithBackoff 1 $ do
             completed <- getUploadedBytes url
-            resumeUpload url completed fileLength mkSource
+            resumeUpload url completed fl mkSource
 
-withSessionUrl :: File -> (URL -> Api b) -> Api b
-withSessionUrl file action  = do
-    response <- requestLbs (baseUrl <> uploadPath file) $
-        setMethod (uploadMethod file) .
+withSessionUrl :: Method -> Path -> FileData -> (URL -> Api a) -> Api a
+withSessionUrl m p fd action  = do
+    response <- requestLbs (baseUrl <> p) $
+        setMethod m .
         setQueryString uploadQuery .
-        setBody (encode $ uploadData file) .
+        setBody (encode fd) .
         addHeader (hContentType, "application/json")
 
     case lookup hLocation $ responseHeaders response of
@@ -129,6 +133,9 @@ retryWithBackoff seconds f = f `catchError` \e ->
     delay = liftIO $ do
         ms <- randomRIO (0, 999)
         threadDelay $ (seconds * 1000 + ms) * 1000
+
+baseUrl :: URL
+baseUrl = "https://www.googleapis.com/upload/drive/v2"
 
 status308 :: Status
 status308 = mkStatus 308 "Resume Incomplete"

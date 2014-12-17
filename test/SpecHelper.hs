@@ -5,6 +5,10 @@ module SpecHelper
     -- * Assertions lifted to @Api@
     , shouldBe
 
+    -- * Fixtures
+    , Fixture(..)
+    , fixture
+
     -- * Re-exports
     , module Test.Hspec
     , module Network.Google.Drive
@@ -21,6 +25,19 @@ import Network.Google.OAuth2
 import System.Environment (getEnv)
 
 import qualified Test.Hspec as H
+
+data Fixture = Fixture
+    { fPath :: FilePath
+    , fSize :: Int
+    , fContent :: String
+    }
+
+fixture :: Fixture
+fixture = Fixture
+    { fPath = "test/files/upload.txt"
+    , fSize = 14
+    , fContent = "Local content\n"
+    }
 
 -- | Run an API spec and cleanup after
 --
