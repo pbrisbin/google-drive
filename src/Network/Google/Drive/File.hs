@@ -121,11 +121,13 @@ getFile fid = (Just <$> getJSON (fileUrl fid) [])
 
 -- | Create a @File@ from @FileData@
 createFile :: FileData -> Api File
-createFile fd = postJSON (baseUrl <> "/files") [] fd
+createFile fd =
+    postJSON (baseUrl <> "/files") [("setModifiedDate", Just "true")] fd
 
 -- | Update a @File@
 updateFile :: FileId -> FileData -> Api File
-updateFile fid fd = putJSON (fileUrl $ fid) [] fd
+updateFile fid fd =
+    putJSON (fileUrl $ fid) [("setModifiedDate", Just "true")] fd
 
 -- | Delete a @File@
 deleteFile :: File -> Api ()
