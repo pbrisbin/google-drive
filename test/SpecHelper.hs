@@ -4,6 +4,7 @@ module SpecHelper
 
     -- * Assertions lifted to @Api@
     , shouldBe
+    , shouldSatisfy
 
     -- * Fixtures
     , Fixture(..)
@@ -15,7 +16,7 @@ module SpecHelper
     , getCurrentTime
     ) where
 
-import Test.Hspec hiding (expectationFailure, shouldBe, shouldSatisfy)
+import Test.Hspec hiding (shouldBe, shouldSatisfy)
 import Network.Google.Drive
 
 import Control.Applicative ((<$>), (<*>))
@@ -72,3 +73,6 @@ getToken = do
 
 shouldBe :: (Eq a, Show a) => a -> a -> Api ()
 x `shouldBe` y = liftIO $ x `H.shouldBe` y
+
+shouldSatisfy :: Show a => a -> (a -> Bool) -> Api ()
+x `shouldSatisfy` y = liftIO $ x `H.shouldSatisfy` y
