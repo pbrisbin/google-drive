@@ -29,9 +29,9 @@ spec = describe "Network.Google.Drive.File" $ do
         runApiSpec $ \folder -> do
             file <- createFile $ setParent folder $ newFile "test-file" now
             let fd = fileData file
-                fd' = fd { fileTitle = "test-file-updated" }
 
-            file' <- updateFile $ file { fileData = fd' }
+            file' <- updateFile (fileId file) $
+                fd { fileTitle = "test-file-updated" }
 
             fileTitle (fileData file') `shouldBe` "test-file-updated"
 

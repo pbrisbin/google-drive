@@ -121,8 +121,8 @@ createFile :: FileData -> Api File
 createFile fd = postJSON (baseUrl <> "/files") [] fd
 
 -- | Update a @File@
-updateFile :: File -> Api File
-updateFile f = putJSON (fileUrl $ fileId f) [] $ fileData f
+updateFile :: FileId -> FileData -> Api File
+updateFile fid fd = putJSON (fileUrl $ fid) [] fd
 
 -- | Delete a @File@
 deleteFile :: File -> Api ()
