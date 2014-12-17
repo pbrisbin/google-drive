@@ -43,4 +43,4 @@ spec = describe "Network.Google.Drive.File" $ do
 
             deleteFile file
 
-            (`shouldBe` Nothing) =<< getFile (fileId file)
+            getFile (fileId file) `shouldReturn` Nothing

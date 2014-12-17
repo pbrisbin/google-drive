@@ -26,8 +26,8 @@ spec = describe "Network.Google.Drive.Upload" $ do
 
             fileTitle (fileData file) `shouldBe` "test-file"
 
-            result <- downloadFile file ($$+- sinkLbs)
-            result `shouldBe` Just (C8.pack $ fContent fixture)
+            downloadFile file ($$+- sinkLbs)
+                `shouldReturn` Just (C8.pack $ fContent fixture)
 
     it "can update existing content" $ do
         now <- getCurrentTime
@@ -44,5 +44,5 @@ spec = describe "Network.Google.Drive.Upload" $ do
 
             fileTitle (fileData file') `shouldBe` "test-file-updated"
 
-            result <- downloadFile file ($$+- sinkLbs)
-            result `shouldBe` Just (C8.pack $ fContent fixture)
+            downloadFile file ($$+- sinkLbs)
+                `shouldReturn` Just (C8.pack $ fContent fixture)

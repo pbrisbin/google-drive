@@ -29,5 +29,5 @@ spec = describe "Network.Google.Drive.Search" $ do
                     (Title ?= ("test-file-1" :: Text) `qOr`
                      Title ?= ("test-file-3" :: Text))
 
-            let titles = map (fileTitle . fileData) files
-            titles `shouldMatchList` ["test-file-1", "test-file-3"]
+            map (fileTitle . fileData) files
+                `shouldMatchList` ["test-file-1", "test-file-3"]
