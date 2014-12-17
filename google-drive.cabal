@@ -69,10 +69,13 @@ Test-Suite spec
                       , hspec
                       , google-drive
                       , google-oauth2
+                      , bytestring
                       , conduit
+                      , conduit-extra
                       , directory
                       , load-env
                       , text
+                      , time
 
 Source-Repository head
   Type:                 git
