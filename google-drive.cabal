@@ -1,5 +1,5 @@
 Name:                   google-drive
-Version:                0.2.0
+Version:                0.3.0
 Author:                 Pat Brisbin <pbrisbin@gmail.com>
 Maintainer:             Pat Brisbin <pbrisbin@gmail.com>
 License:                MIT
@@ -8,29 +8,7 @@ Synopsis:               Google Drive API access
 Description:
   Interacting with the Google Drive API
   .
-  Example usage:
-  .
-  > import Control.Monad (void)
-  > import Data.Conduit (($$+-))
-  >
-  > import Network.Google.Drive
-  >
-  > main :: IO ()
-  > main = void $ runApi token $ do
-  >     root <- getFile "root"
-  >     items <- listFiles $ ParentEq (fileId root) `And` Untrashed
-  >
-  >     mapM_ download items
-  >
-  >   where
-  >     download :: File -> Api ()
-  >     download file = do
-  >         let fd = fileData file
-  >
-  >         case fileDownloadUrl $ fd of
-  >             Nothing -> return ()
-  >             Just url -> getSource (T.unpack url) [] $ \source ->
-  >                 source $$+- sinkFile (fileTitle fd)
+  See https://github.com/pbrisbin/google-drive for usage and details.
   .
 
 Cabal-Version:          >= 1.10
