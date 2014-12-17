@@ -6,7 +6,8 @@
 --
 -- https://developers.google.com/drive/v2/reference/files
 --
--- See @"Network.Google.Drive.Upload"@ for uploading files.
+-- This module is mostly concerned with creating and updating metadata. See
+-- @"Network.Google.Drive.Upload"@ for uploading content.
 --
 module Network.Google.Drive.File
     (
@@ -106,6 +107,8 @@ instance FromJSON File where
 -- | Get a @File@ data by @FileId@
 --
 -- @\"root\"@ can be used to get information on the Drive itself
+--
+-- If the API returns 404, this returns @Nothing@
 --
 getFile :: FileId -> Api (Maybe File)
 getFile fid = (Just <$> getJSON (fileUrl fid) [])

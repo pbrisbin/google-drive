@@ -1,4 +1,10 @@
 {-# LANGUAGE OverloadedStrings #-}
+-- |
+--
+-- Searching for files on your drive.
+--
+-- https://developers.google.com/drive/web/search-parameters
+--
 module Network.Google.Drive.Search
     ( listFiles
     , listVisibleContents
@@ -36,6 +42,7 @@ import qualified Data.Text as T
 
 type Query = Text
 
+-- | Queriable fields
 data Field
     = Title
     | FullText
@@ -52,6 +59,7 @@ data Field
     | Properties
     deriving Show
 
+-- | Type class for values which can be used in queries
 class QueryValue a where
     escapeValue :: a -> Text
 
@@ -115,7 +123,7 @@ listVisibleContents folder =
 --
 -- Used for @Parents@, @Owners@, @Writers@, and @Readers@.
 --
--- Note the reversed arguments.
+-- Note the reversed arguments such that infix usage makes sense.
 --
 qIn :: QueryValue a => a -> Field -> Query
 qIn v f = T.intercalate " " [escapeValue v, "in", escapeField f]

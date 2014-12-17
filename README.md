@@ -11,28 +11,34 @@ Google Drive API access
 ## Usage
 
 ```haskell
-import Control.Monad (void)
-import Data.Conduit (($$+-))
-
+-- Top level re-exports all the sub-modules
 import Network.Google.Drive
 
+import Control.Monad (forM_)
+import Data.Conduit (($$+-))
+
 main :: IO ()
-main = void $ runApi token $ do
-    root <- getFile "root"
-    items <- listFiles $ ParentEq (fileId root) `And` Untrashed
+main = do
+    -- See my separate google-oauth2 library
+    let token = undefined
 
-    mapM_ download items
+    -- runApi would return an Either ApiError a
+    -- runApi_ discards the a and raises any errors, useful only in toy examples
+    runApi_ token $ do
+        -- "root" is an alias for the ID of the Drive itself
+        root <- getFile "root"
 
-  where
-    download :: File -> Api ()
-    download file = do
-        let fd = fileData file
+        -- Note: This is already available as listVisibleContents
+        items <- listFiles $ (fileId root) `qIn` Parents `qAnd` Trashed ?= False
 
-        case fileDownloadUrl $ fd of
-            Nothing -> return ()
-            Just url -> getSource (T.unpack url) [] $ \source ->
-                source $$+- sinkFile (fileTitle fd)
+        forM_ items $ \item ->
+            -- Stream the content to ./<file-title>
+            let sink = ($$+- sinkFile (localPath item))
+
+            downloadFile item sink
 ```
+
+See the tests and haddocks for more information.
 
 ## Developing and Tests
 
