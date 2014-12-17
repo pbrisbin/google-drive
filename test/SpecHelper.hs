@@ -2,21 +2,26 @@
 module SpecHelper
     ( runApiSpec
 
-    -- * Assertions lifted to @Api@
-    , shouldBe
-    , shouldSatisfy
-
     -- * Fixtures
     , Fixture(..)
     , fixture
 
     -- * Re-exports
     , module Test.Hspec
+    , module Test.Hspec.Expectations.Lifted
     , module Network.Google.Drive
     , getCurrentTime
     ) where
 
-import Test.Hspec hiding (shouldBe, shouldSatisfy)
+import Test.Hspec hiding
+    ( expectationFailure
+    , shouldBe
+    , shouldContain
+    , shouldMatchList
+    , shouldReturn
+    , shouldSatisfy
+    )
+import Test.Hspec.Expectations.Lifted
 import Network.Google.Drive
 
 import Control.Applicative ((<$>), (<*>))
@@ -24,8 +29,6 @@ import Data.Time (getCurrentTime)
 import LoadEnv (loadEnv)
 import Network.Google.OAuth2
 import System.Environment (getEnv)
-
-import qualified Test.Hspec as H
 
 data Fixture = Fixture
     { fPath :: FilePath
@@ -70,9 +73,3 @@ getToken = do
         <*> getEnv "CLIENT_SECRET"
 
     getAccessToken client driveScopes . Just =<< getEnv "CACHE_FILE"
-
-shouldBe :: (Eq a, Show a) => a -> a -> Api ()
-x `shouldBe` y = liftIO $ x `H.shouldBe` y
-
-shouldSatisfy :: Show a => a -> (a -> Bool) -> Api ()
-x `shouldSatisfy` y = liftIO $ x `H.shouldSatisfy` y
