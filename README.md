@@ -38,7 +38,7 @@ main = do
         -- Note: This is already available as listVisibleContents
         items <- listFiles $ (fileId root) `qIn` Parents `qAnd` Trashed ?= False
 
-        forM_ items $ \item ->
+        forM_ items $ \item -> do
             -- Stream the content to ./<file-title>
             let sink = ($$+- sinkFile (localPath item))
 
