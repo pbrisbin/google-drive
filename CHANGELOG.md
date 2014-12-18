@@ -5,6 +5,7 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased][]
 
 - Added `QueryValue` instance for `UTCTime`
+- Export `folderMimeType` for use with `setMimeType`
 
 ## [0.3.0][] 2014-12-17
 
