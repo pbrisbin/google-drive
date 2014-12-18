@@ -34,6 +34,7 @@ module Network.Google.Drive.File
     , isFolder
     , isDownloadable
     , localPath
+    , folderMimeType
     ) where
 
 import Network.Google.Api
