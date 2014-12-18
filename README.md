@@ -5,7 +5,7 @@ Google Drive API access
 ## Stability
 
 As we are still pre-1.0, I consider all types and interfaces freely changeable
-in anyway accompanied by only a minor version bump.
+in any way accompanied by only a minor version bump.
 
 I apologize if this breaks your code. Update at your own risk.
 
