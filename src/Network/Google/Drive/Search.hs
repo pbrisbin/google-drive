@@ -37,6 +37,8 @@ import Data.Char (toLower)
 import Data.Monoid ((<>))
 import Data.Text (Text)
 import Data.Text.Encoding (encodeUtf8)
+import Data.Time (UTCTime, utc, utcToZonedTime)
+import Data.Time.RFC3339 (showRFC3339)
 
 import qualified Data.Text as T
 
@@ -70,9 +72,8 @@ instance QueryValue Bool where
     escapeValue True = "true"
     escapeValue False = "false"
 
--- TODO
--- instance QueryValue UTCTime where
--- RFC 3339 format, default timezone is UTC, e.g., 2012-06-04T12:00:00-08:00.
+instance QueryValue UTCTime where
+    escapeValue = T.pack . showRFC3339 . utcToZonedTime utc
 
 newtype Items = Items [File]
 
