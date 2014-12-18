@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased][]
 
+- Added `QueryValue` instance for `UTCTime`
+
 ## [0.3.0][] 2014-12-17
 
 All create/update calls now pass `setModifiedDate = true`.
