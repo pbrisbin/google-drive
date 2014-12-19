@@ -41,7 +41,10 @@ import Network.Google.Api
 
 import Control.Applicative ((<$>), (<*>))
 import Control.Monad (mzero, void)
+import Control.Monad.Trans.Resource (ResourceT)
 import Data.Aeson
+import Data.ByteString (ByteString)
+import Data.Conduit (ResumableSource)
 import Data.Maybe (isJust)
 import Data.Monoid ((<>))
 import Data.Text (Text)
@@ -49,7 +52,7 @@ import Data.Time (UTCTime)
 import Network.HTTP.Conduit (HttpException(..))
 import Network.HTTP.Types (status404)
 
-import qualified Data.Traversable as F
+--import qualified Data.Traversable as F
 import qualified Data.Text as T
 
 type FileId = Text
@@ -105,13 +108,19 @@ instance FromJSON File where
         <*> parseJSON v
     parseJSON _ = mzero
 
+-- | Downloads use sinks for space efficiency and so that callers can implement
+--   things like throttling or progress output themselves. If you just want to
+--   download to a file, use the re-exported @'sinkFile'@
+type DownloadSink a =
+    ResumableSource (ResourceT IO) ByteString -> ResourceT IO a
+
 -- | Get a @File@ data by @FileId@
 --
 -- @\"root\"@ can be used to get information on the Drive itself
 --
 -- If the API returns 404, this returns @Nothing@
 --
-getFile :: FileId -> Api (Maybe File)
+getFile :: FileId -> DriveApi (Maybe File)
 getFile fid = (Just <$> getJSON (fileUrl fid) [])
     `catchError` handleNotFound
 
@@ -121,26 +130,26 @@ getFile fid = (Just <$> getJSON (fileUrl fid) [])
     handleNotFound e = throwError e
 
 -- | Create a @File@ from @FileData@
-createFile :: FileData -> Api File
-createFile fd =
-    postJSON (baseUrl <> "/files") [("setModifiedDate", Just "true")] fd
+createFile :: FileData -> DriveApi File
+createFile fd = postJSON "/drive/v2/files" [("setModifiedDate", Just "true")] fd
 
 -- | Update a @File@
-updateFile :: FileId -> FileData -> Api File
+updateFile :: FileId -> FileData -> DriveApi File
 updateFile fid fd =
     putJSON (fileUrl $ fid) [("setModifiedDate", Just "true")] fd
 
 -- | Delete a @File@
-deleteFile :: File -> Api ()
+deleteFile :: File -> DriveApi ()
 deleteFile f = void $ requestLbs (fileUrl $ fileId f) $ setMethod "DELETE"
 
 -- | Download a @File@
 --
 -- Returns @Nothing@ if the file is not downloadable
 --
-downloadFile :: File -> DownloadSink a -> Api (Maybe a)
-downloadFile f sink = F.forM (fileDownloadUrl $ fileData f) $ \url ->
-    getSource (T.unpack url) [] sink
+downloadFile :: File -> DownloadSink a -> DriveApi (Maybe a)
+downloadFile = undefined
+-- downloadFile f sink = F.forM (fileDownloadUrl $ fileData f) $ \url ->
+--     getSource (URL $ T.unpack url) [] sink
 
 newFile :: FileTitle -> UTCTime -> FileData
 newFile title modified = FileData
@@ -177,11 +186,8 @@ isFolder = (== folderMimeType) . fileMimeType . fileData
 isDownloadable :: File -> Bool
 isDownloadable = isJust . fileDownloadUrl . fileData
 
-baseUrl :: URL
-baseUrl = "https://www.googleapis.com/drive/v2"
-
-fileUrl :: FileId -> URL
-fileUrl fid = baseUrl <> "/files/" <> T.unpack fid
+fileUrl :: FileId -> Resource
+fileUrl fid = URL $ "/drive/v2/files/" <> T.unpack fid
 
 folderMimeType :: Text
 folderMimeType = "application/vnd.google-apps.folder"
