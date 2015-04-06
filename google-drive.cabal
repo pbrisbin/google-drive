@@ -38,6 +38,7 @@ Library
                       , text
                       , time
                       , timerep
+                      , unordered-containers
 
 Test-Suite spec
   Type:                 exitcode-stdio-1.0

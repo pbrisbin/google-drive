@@ -16,6 +16,7 @@ module Network.Google.Drive.File
     , FileId
     , FileData(..)
     , FileTitle
+    , MimeType
 
     -- * Building @File@s
     , newFile
@@ -42,7 +43,8 @@ import Network.Google.Api
 import Control.Applicative ((<$>), (<*>))
 import Control.Monad (mzero, void)
 import Data.Aeson
-import Data.Maybe (isJust)
+import Data.HashMap.Strict (HashMap, empty)
+import Data.Maybe (isJust, fromMaybe)
 import Data.Monoid ((<>))
 import Data.Text (Text)
 import Data.Time (UTCTime)
@@ -54,6 +56,7 @@ import qualified Data.Text as T
 
 type FileId = Text
 type FileTitle = Text
+type MimeType = Text
 
 -- | Metadata about Files on your Drive
 data FileData = FileData
@@ -64,6 +67,7 @@ data FileData = FileData
     , fileSize :: !(Maybe Int)
     , fileDownloadUrl :: !(Maybe Text)
     , fileMimeType :: !Text
+    , fileExportLinks :: !(HashMap MimeType Text)
     }
 
 -- | An existing file
@@ -87,6 +91,7 @@ instance FromJSON FileData where
         <*> (fmap read <$> o .:? "fileSize") -- fileSize is a String!
         <*> o .:? "downloadUrl"
         <*> o .: "mimeType"
+        <*> (fromMaybe empty <$> o .:? "exportLinks")
 
     parseJSON _ = mzero
 
@@ -151,6 +156,7 @@ newFile title modified = FileData
     , fileSize = Nothing
     , fileDownloadUrl = Nothing
     , fileMimeType = ""
+    , fileExportLinks = empty
     }
 
 newFolder :: FileTitle -> UTCTime -> FileData
