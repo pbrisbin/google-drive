@@ -44,7 +44,7 @@ import Control.Applicative ((<$>), (<*>))
 import Control.Monad (mzero, void)
 import Data.Aeson
 import Data.HashMap.Strict (HashMap, empty)
-import Data.Maybe (isJust, fromMaybe)
+import Data.Maybe (isJust)
 import Data.Monoid ((<>))
 import Data.Text (Text)
 import Data.Time (UTCTime)
@@ -66,7 +66,7 @@ data FileData = FileData
     , fileTrashed :: !Bool
     , fileSize :: !(Maybe Int)
     , fileDownloadUrl :: !(Maybe Text)
-    , fileMimeType :: !Text
+    , fileMimeType :: !MimeType
     , fileExportLinks :: !(HashMap MimeType Text)
     }
 
@@ -91,7 +91,7 @@ instance FromJSON FileData where
         <*> (fmap read <$> o .:? "fileSize") -- fileSize is a String!
         <*> o .:? "downloadUrl"
         <*> o .: "mimeType"
-        <*> (fromMaybe empty <$> o .:? "exportLinks")
+        <*> o .:? "exportLinks" .!= empty
 
     parseJSON _ = mzero
 
@@ -165,7 +165,7 @@ newFolder title = setMimeType folderMimeType . newFile title
 setParent :: File -> FileData -> FileData
 setParent p f = f { fileParents = [fileId p] }
 
-setMimeType :: Text -> FileData -> FileData
+setMimeType :: MimeType -> FileData -> FileData
 setMimeType m f = f { fileMimeType = m }
 
 -- | What to name this file if downloaded
@@ -189,5 +189,5 @@ baseUrl = "https://www.googleapis.com/drive/v2"
 fileUrl :: FileId -> URL
 fileUrl fid = baseUrl <> "/files/" <> T.unpack fid
 
-folderMimeType :: Text
+folderMimeType :: MimeType
 folderMimeType = "application/vnd.google-apps.folder"
