@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE OverloadedStrings #-}
 module SpecHelper
     ( runApiSpec
@@ -24,7 +25,10 @@ import Test.Hspec hiding
 import Test.Hspec.Expectations.Lifted
 import Network.Google.Drive
 
+#if __GLASGOW_HASKELL__ < 710
 import Control.Applicative ((<$>), (<*>))
+#endif
+
 import Data.Time (getCurrentTime)
 import LoadEnv (loadEnv)
 import Network.Google.OAuth2

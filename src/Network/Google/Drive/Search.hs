@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE OverloadedStrings #-}
 -- |
 --
@@ -30,7 +31,10 @@ module Network.Google.Drive.Search
 import Network.Google.Api
 import Network.Google.Drive.File
 
+#if __GLASGOW_HASKELL__ < 710
 import Control.Applicative ((<$>), (<$>))
+#endif
+
 import Control.Monad (mzero)
 import Data.Aeson
 import Data.Char (toLower)

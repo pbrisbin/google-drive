@@ -1,3 +1,5 @@
+{-# LANGUAGE CPP #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 -- |
@@ -40,7 +42,10 @@ module Network.Google.Drive.File
 
 import Network.Google.Api
 
+#if __GLASGOW_HASKELL__ < 710
 import Control.Applicative ((<$>), (<*>))
+#endif
+
 import Control.Monad (mzero, void)
 import Data.Aeson
 import Data.HashMap.Strict (HashMap, empty)

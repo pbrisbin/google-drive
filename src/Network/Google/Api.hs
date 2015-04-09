@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE OverloadedStrings #-}
 -- |
@@ -49,8 +50,11 @@ module Network.Google.Api
     , sinkFile
     ) where
 
+#if __GLASGOW_HASKELL__ < 710
 import Control.Applicative ((<$>))
-import Control.Monad.Error
+#endif
+
+import Control.Monad.Except
 import Control.Monad.Reader
 import Control.Monad.Trans.Resource
 import Data.Aeson (FromJSON(..), ToJSON(..), eitherDecode, encode)
@@ -105,13 +109,10 @@ instance Show ApiError where
     show (InvalidJSON msg) = "failure parsing JSON: " <> msg
     show (GenericError msg) = msg
 
-instance Error ApiError where
-    strMsg = GenericError
-
 instance E.Exception ApiError
 
 -- | A transformer stack for providing the access token and rescuing errors
-type Api = ReaderT (String, Manager) (ErrorT ApiError IO)
+type Api = ReaderT (String, Manager) (ExceptT ApiError IO)
 
 -- | Run an @Api@ computation with the given Access token
 runApi :: String -- ^ OAuth2 access token
@@ -119,7 +120,7 @@ runApi :: String -- ^ OAuth2 access token
        -> IO (Either ApiError a)
 runApi token f =
     E.bracket (newManager conduitManagerSettings) closeManager $ \manager ->
-        runErrorT $ runReaderT f (token, manager)
+        runExceptT $ runReaderT f (token, manager)
 
 -- | Like @runApi@ but discards the result and raises @ApiError@s as exceptions
 runApi_ :: String -> Api a -> IO ()
