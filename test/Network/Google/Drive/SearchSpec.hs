@@ -25,8 +25,8 @@ spec = describe "Network.Google.Drive.Search" $ do
                 ]
 
             files <- listFiles $
-                fileId folder `qIn` Parents `qAnd`
-                    (Title ?= ("test-file-1" :: Text) `qOr`
+                fileId folder `qIn` Parents ?&&
+                    (Title ?= ("test-file-1" :: Text) ?||
                      Title ?= ("test-file-3" :: Text))
 
             map (fileTitle . fileData) files

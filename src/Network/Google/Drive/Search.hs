@@ -20,6 +20,8 @@ module Network.Google.Drive.Search
     , (?<=)
     , (?>)
     , (?>=)
+    , (?&&)
+    , (?||)
     , qIn
     , qHas
     , qContains
@@ -147,17 +149,32 @@ qHas = qOp "has"
 qContains :: QueryValue a => Field -> a -> Query
 qContains = qOp "contains"
 
+infixr 3 ?&&
+
+-- | Return files that match both clauses
+(?&&) :: Query -> Query -> Query
+q ?&& p = "(" <> p <> ") and (" <> q <> ")"
+
 infixr 3 `qAnd`
 
 -- | Return files that match both clauses
 qAnd :: Query -> Query -> Query
-q `qAnd` p = "(" <> p <> ") and (" <> q <> ")"
+qAnd = (?&&)
+
+infixr 2 ?||
+
+-- | Return files that match either clause
+(?||) :: Query -> Query -> Query
+q ?|| p = "(" <> p <> ") or (" <> q <> ")"
 
 infixr 2 `qOr`
 
 -- | Return files that match either clause
 qOr :: Query -> Query -> Query
-q `qOr` p = "(" <> p <> ") or (" <> q <> ")"
+qOr = (?||)
+
+{-# DEPRECATED qAnd "Use ?&& instead" #-}
+{-# DEPRECATED qOr "Use ?|| instead" #-}
 
 -- | Negates a search clause
 qNot :: Query -> Query
