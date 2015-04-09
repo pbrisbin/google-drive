@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased][]
 
 - Add `MimeType` synonym [#1][].
-- Add `exportLinks` field on `File` [#1][].
+- Add `fileExportLinks` field on `File` [#1][].
 
 [#1]: https://github.com/pbrisbin/google-drive/pull/1
 
