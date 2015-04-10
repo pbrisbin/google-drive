@@ -4,8 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased][]
 
-- Add `MimeType` synonym [#1][].
-- Add `fileExportLinks` field on `File` [#1][].
+- Add `MimeType` synonym [#1][]
+- Add `fileExportLinks` field on `File` [#1][]
+- Compile on GHC 7.10
+- Replace `qAnd`/`qOr` with `?&&`/`?||`
 
 [#1]: https://github.com/pbrisbin/google-drive/pull/1
 
