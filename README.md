@@ -30,19 +30,18 @@ main = do
     let token = undefined
 
     -- runApi would return an Either ApiError a
-    -- runApi_ discards the a and raises any errors, useful only in toy examples
+    -- runApi_ discards the a and raises any errors, useful in CLI apps
     runApi_ token $ do
         -- "root" is an alias for the ID of the Drive itself
-        root <- getFile "root"
+        Just root <- getFile "root"
 
         -- Note: This is already available as listVisibleContents
-        items <- listFiles $ (fileId root) `qIn` Parents `qAnd` Trashed ?= False
+        items <- listFiles $ (fileId root) `qIn` Parents ?&& Trashed ?= False
 
         forM_ items $ \item -> do
-            -- Stream the content to ./<file-title>
-            let sink = ($$+- sinkFile (localPath item))
+            let path = localPath item
 
-            downloadFile item sink
+            downloadFile item ($$+- sinkFile path)
 ```
 
 See the tests and haddocks for more information.
