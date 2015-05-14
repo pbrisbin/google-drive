@@ -37,7 +37,7 @@ Library
                       , resourcet
                       , text
                       , time
-                      , timerep
+                      , timerep         < 2.0
                       , unordered-containers
 
 Test-Suite spec
