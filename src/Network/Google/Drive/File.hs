@@ -46,6 +46,7 @@ import Network.Google.Api
 import Control.Applicative ((<$>), (<*>))
 #endif
 
+import Control.Applicative (pure)
 import Control.Monad (mzero, void)
 import Data.Aeson
 import Data.HashMap.Strict (HashMap, empty)
@@ -66,7 +67,7 @@ type MimeType = Text
 -- | Metadata about Files on your Drive
 data FileData = FileData
     { fileTitle :: !FileTitle
-    , fileModified :: !UTCTime
+    , fileModified :: !(Maybe UTCTime)
     , fileParents :: ![FileId]
     , fileTrashed :: !Bool
     , fileSize :: !(Maybe Int)
@@ -101,9 +102,9 @@ instance FromJSON FileData where
     parseJSON _ = mzero
 
 instance ToJSON FileData where
-    toJSON FileData{..} = object
+    toJSON FileData{..} = object $
+        (maybe [] (pure . ("modifiedDate" .=)) fileModified) ++
         [ "title" .= fileTitle
-        , "modifiedDate" .= fileModified
         , "parents" .= map (\p -> object ["id" .= p]) fileParents
         , "labels" .= object ["trashed" .= fileTrashed]
         , "mimeType" .= fileMimeType
@@ -133,12 +134,12 @@ getFile fid = (Just <$> getJSON (fileUrl fid) [])
 -- | Create a @File@ from @FileData@
 createFile :: FileData -> Api File
 createFile fd =
-    postJSON (baseUrl <> "/files") [("setModifiedDate", Just "true")] fd
+    postJSON (baseUrl <> "/files") (maybe [] (const [("setModifiedDate", Just "true")]) (fileModified fd)) fd
 
 -- | Update a @File@
 updateFile :: FileId -> FileData -> Api File
 updateFile fid fd =
-    putJSON (fileUrl $ fid) [("setModifiedDate", Just "true")] fd
+    putJSON (fileUrl $ fid) (maybe [] (const [("setModifiedDate", Just "true")]) (fileModified fd)) fd
 
 -- | Delete a @File@
 deleteFile :: File -> Api ()
@@ -152,10 +153,10 @@ downloadFile :: File -> DownloadSink a -> Api (Maybe a)
 downloadFile f sink = F.forM (fileDownloadUrl $ fileData f) $ \url ->
     getSource (T.unpack url) [] sink
 
-newFile :: FileTitle -> UTCTime -> FileData
-newFile title modified = FileData
+newFile :: FileTitle -> Maybe UTCTime -> FileData
+newFile title maybeModified = FileData
     { fileTitle = title
-    , fileModified = modified
+    , fileModified = maybeModified
     , fileParents = []
     , fileTrashed = False
     , fileSize = Nothing
@@ -164,7 +165,7 @@ newFile title modified = FileData
     , fileExportLinks = empty
     }
 
-newFolder :: FileTitle -> UTCTime -> FileData
+newFolder :: FileTitle -> Maybe UTCTime -> FileData
 newFolder title = setMimeType folderMimeType . newFile title
 
 setParent :: File -> FileData -> FileData
