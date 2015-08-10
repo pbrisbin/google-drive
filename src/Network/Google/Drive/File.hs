@@ -102,9 +102,9 @@ instance FromJSON FileData where
     parseJSON _ = mzero
 
 instance ToJSON FileData where
-    toJSON FileData{..} = object $
-        (maybe [] (pure . ("modifiedDate" .=)) fileModified) ++
+    toJSON FileData{..} = object
         [ "title" .= fileTitle
+        , "modifiedDate" .= fileModified
         , "parents" .= map (\p -> object ["id" .= p]) fileParents
         , "labels" .= object ["trashed" .= fileTrashed]
         , "mimeType" .= fileMimeType
@@ -134,12 +134,18 @@ getFile fid = (Just <$> getJSON (fileUrl fid) [])
 -- | Create a @File@ from @FileData@
 createFile :: FileData -> Api File
 createFile fd =
-    postJSON (baseUrl <> "/files") (maybe [] (const [("setModifiedDate", Just "true")]) (fileModified fd)) fd
+    postJSON (baseUrl <> "/files") (params $ fileModified fd) fd
+      where
+        params (Just _) = [("setModifiedDate", Just "true")]
+        params Nothing = []
 
 -- | Update a @File@
 updateFile :: FileId -> FileData -> Api File
 updateFile fid fd =
-    putJSON (fileUrl $ fid) (maybe [] (const [("setModifiedDate", Just "true")]) (fileModified fd)) fd
+    putJSON (fileUrl $ fid) (params $ fileModified fd) fd
+      where
+        params (Just _) = [("setModifiedDate", Just "true")]
+        params Nothing = []
 
 -- | Delete a @File@
 deleteFile :: File -> Api ()
