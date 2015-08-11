@@ -55,13 +55,12 @@ fixture = Fixture
 --
 runApiSpec :: (File -> Api a) -> IO ()
 runApiSpec spec = do
-    now <- getCurrentTime
     token <- getToken
 
     runApi_ token $ do
         Just root <- getFile "root"
         folder <- createFile $
-            setParent root $ newFolder "google-drive-test" now
+            setParent root $ newFolder "google-drive-test" Nothing
 
         spec folder `finally` deleteFile folder
 

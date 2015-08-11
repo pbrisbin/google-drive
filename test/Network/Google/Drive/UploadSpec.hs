@@ -16,10 +16,8 @@ main = hspec spec
 spec :: Spec
 spec = describe "Network.Google.Drive.Upload" $ do
     it "can upload new content" $ do
-        now <- getCurrentTime
-
         runApiSpec $ \folder -> do
-            let fd = setParent folder $ newFile "test-file" now
+            let fd = setParent folder $ newFile "test-file" Nothing
 
             file <- createFileWithContent fd (fSize fixture) $
                 uploadSourceFile $ fPath fixture
@@ -30,10 +28,8 @@ spec = describe "Network.Google.Drive.Upload" $ do
                 `shouldReturn` Just (C8.pack $ fContent fixture)
 
     it "can update existing content" $ do
-        now <- getCurrentTime
-
         runApiSpec $ \folder -> do
-            let fd = setParent folder $ newFile "test-file" now
+            let fd = setParent folder $ newFile "test-file" Nothing
 
             file <- createFile fd
             file' <- updateFileWithContent
