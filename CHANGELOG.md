@@ -4,12 +4,20 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased][]
 
+- (None)
+
+## [0.4.0][] 2014-12-18
+
 - Add `MimeType` synonym [#1][]
 - Add `fileExportLinks` field on `File` [#1][]
 - Compile on GHC 7.10
 - Replace `qAnd`/`qOr` with `?&&`/`?||`
+- Make `fileModified` a `Maybe`; don't pass `setModifiedDate = true` when
+  `Nothing` [#3][]
+- Workaround suspected bug in Google's validation of datetime values
 
 [#1]: https://github.com/pbrisbin/google-drive/pull/1
+[#3]: https://github.com/pbrisbin/google-drive/pull/3
 
 ## [0.3.1][] 2014-12-18
 
@@ -62,6 +70,7 @@ Extracted initial library out of existing project.
 - Get, delete, list, and upload Files
 
 [unreleased]: https://github.com/pbrisbin/google-drive/compare/v0.3.1...HEAD
+[0.4.0]: https://github.com/pbrisbin/google-drive/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/pbrisbin/google-drive/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/pbrisbin/google-drive/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/pbrisbin/google-drive/compare/v0.1.0...v0.2.0
