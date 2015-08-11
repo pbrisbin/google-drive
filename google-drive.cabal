@@ -20,6 +20,7 @@ Library
   GHC-Options:          -Wall
   Exposed-Modules:      Network.Google.Api
                       , Network.Google.Drive
+                      , Network.Google.Drive.DateTime
                       , Network.Google.Drive.File
                       , Network.Google.Drive.Search
                       , Network.Google.Drive.Upload
@@ -37,7 +38,6 @@ Library
                       , resourcet
                       , text
                       , time
-                      , timerep         < 2.0
                       , unordered-containers
 
 Test-Suite spec

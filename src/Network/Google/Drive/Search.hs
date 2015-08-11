@@ -31,6 +31,7 @@ module Network.Google.Drive.Search
     ) where
 
 import Network.Google.Api
+import Network.Google.Drive.DateTime
 import Network.Google.Drive.File
 
 #if __GLASGOW_HASKELL__ < 710
@@ -43,8 +44,7 @@ import Data.Char (toLower)
 import Data.Monoid ((<>))
 import Data.Text (Text)
 import Data.Text.Encoding (encodeUtf8)
-import Data.Time (UTCTime, utc, utcToZonedTime)
-import Data.Time.RFC3339 (showRFC3339)
+import Data.Time (UTCTime)
 
 import qualified Data.Text as T
 
@@ -79,7 +79,7 @@ instance QueryValue Bool where
     escapeValue False = "false"
 
 instance QueryValue UTCTime where
-    escapeValue = T.pack . showRFC3339 . utcToZonedTime utc
+    escapeValue = formatDateTime
 
 newtype Items = Items [File]
 

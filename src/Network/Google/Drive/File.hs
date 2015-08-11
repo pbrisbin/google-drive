@@ -41,6 +41,7 @@ module Network.Google.Drive.File
     ) where
 
 import Network.Google.Api
+import Network.Google.Drive.DateTime
 
 #if __GLASGOW_HASKELL__ < 710
 import Control.Applicative ((<$>), (<*>))
@@ -104,7 +105,7 @@ instance FromJSON FileData where
 instance ToJSON FileData where
     toJSON FileData{..} = object
         [ "title" .= fileTitle
-        , "modifiedDate" .= fileModified
+        , "modifiedDate" .= formatDateTime fileModified
         , "parents" .= map (\p -> object ["id" .= p]) fileParents
         , "labels" .= object ["trashed" .= fileTrashed]
         , "mimeType" .= fileMimeType
