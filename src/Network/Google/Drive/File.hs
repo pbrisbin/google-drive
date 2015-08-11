@@ -44,10 +44,9 @@ import Network.Google.Api
 import Network.Google.Drive.DateTime
 
 #if __GLASGOW_HASKELL__ < 710
-import Control.Applicative ((<$>), (<*>))
+import Control.Applicative ((<$>), (<*>), pure)
 #endif
 
-import Control.Applicative (pure)
 import Control.Monad (mzero, void)
 import Data.Aeson
 import Data.HashMap.Strict (HashMap, empty)

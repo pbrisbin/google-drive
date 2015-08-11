@@ -70,8 +70,6 @@ import Network.HTTP.Conduit
     , RequestBody(..)
     , Response(..)
     , Manager
-    , conduitManagerSettings
-    , closeManager
     , http
     , httpLbs
     , newManager
@@ -79,6 +77,7 @@ import Network.HTTP.Conduit
     , requestBodySource
     , responseBody
     , setQueryString
+    , tlsManagerSettings
     )
 import Network.HTTP.Types
     ( Header
@@ -118,9 +117,9 @@ type Api = ReaderT (String, Manager) (ExceptT ApiError IO)
 runApi :: String -- ^ OAuth2 access token
        -> Api a
        -> IO (Either ApiError a)
-runApi token f =
-    E.bracket (newManager conduitManagerSettings) closeManager $ \manager ->
-        runExceptT $ runReaderT f (token, manager)
+runApi token f = do
+    manager <- newManager tlsManagerSettings
+    runExceptT $ runReaderT f (token, manager)
 
 -- | Like @runApi@ but discards the result and raises @ApiError@s as exceptions
 runApi_ :: String -> Api a -> IO ()
