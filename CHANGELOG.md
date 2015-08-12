@@ -6,6 +6,10 @@ All notable changes to this project will be documented in this file.
 
 - (None)
 
+## [0.4.1][] 2015-8-12
+
+- Add missing lower bounds on time and mtl
+
 ## [0.4.0][] 2015-8-11
 
 - Add `MimeType` synonym [#1][]
@@ -69,7 +73,8 @@ Extracted initial library out of existing project.
 - Generic API interface
 - Get, delete, list, and upload Files
 
-[unreleased]: https://github.com/pbrisbin/google-drive/compare/v0.3.1...HEAD
+[unreleased]: https://github.com/pbrisbin/google-drive/compare/v0.4.1...HEAD
+[0.4.1]: https://github.com/pbrisbin/google-drive/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/pbrisbin/google-drive/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/pbrisbin/google-drive/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/pbrisbin/google-drive/compare/v0.2.0...v0.3.0
