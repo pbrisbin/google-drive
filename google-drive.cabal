@@ -33,11 +33,11 @@ Library
                       , filepath
                       , http-conduit    >= 2.1          && < 2.2
                       , http-types
-                      , mtl
+                      , mtl             >= 2.2.1
                       , random
                       , resourcet
                       , text
-                      , time
+                      , time            >= 1.5
                       , unordered-containers
 
 Test-Suite spec
