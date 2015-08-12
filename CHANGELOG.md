@@ -6,7 +6,7 @@ All notable changes to this project will be documented in this file.
 
 - (None)
 
-## [0.4.0][] 2014-12-18
+## [0.4.0][] 2015-8-11
 
 - Add `MimeType` synonym [#1][]
 - Add `fileExportLinks` field on `File` [#1][]
