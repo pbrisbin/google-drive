@@ -1,0 +1,13 @@
+machine:
+  environment:
+    # Dummy values to get past getEnv. Will be unused because token info is
+    # pre-cached.
+    CLIENT_ID: x
+    CLIENT_SECRET: x
+    CACHE_FILE: /tmp/google-drive-test.token
+  ghc:
+    version: 7.10.1
+
+dependencies:
+  pre:
+    - echo $GOOGLE_TOKEN_BASE64 | sed 's/ //g' | base64 -d > /tmp/google-drive-test.token
